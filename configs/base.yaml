@@ -34,6 +34,7 @@ data:
     normalize_teencode: true
     emoji: demojize   # keep | remove | demojize (emoji phổ biến sang tiếng Việt, còn lại tên tiếng Anh)
     word_segment: vncorenlp   # vncorenlp (PhoBERT, cần Java) | underthesea | none (ViSoBERT)
+    cache_dir: null   # null = paths.cache_dir. Notebook train trên Kaggle: /kaggle/input/<output 01a>/cache
   image_resize: pad    # pad (letterbox vuông, giữ toàn bộ ảnh) | crop (center-crop của processor, như code cũ)
   image_augment: false # crop 90-100% + chỉnh sáng/tương phản, chỉ khi train
   sampler: random     # random | weighted (oversampling lớp hiếm)

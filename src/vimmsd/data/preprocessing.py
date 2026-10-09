@@ -1,4 +1,3 @@
-import hashlib
 import html
 import json
 import os
@@ -166,6 +165,7 @@ VNCORENLP_URL = "https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/"
 VNCORENLP_FILES = ("VnCoreNLP-1.2.jar", "models/wordsegmenter/vi-vocab", "models/wordsegmenter/wordsegmenter.rdr")
 
 
+
 @lru_cache(maxsize=1)
 def _vncorenlp():
     """RDRSegmenter của VnCoreNLP, công cụ tách từ PhoBERT dùng khi pretrain. Cần Java (JDK/JRE >= 8).
@@ -243,7 +243,8 @@ def clean_text(
 class TextPreprocessor:
     """Xử lý hàng loạt và lưu trữ kết quả tiền xử lý văn bản ra đĩa đệm."""
 
-    def __init__(self, lowercase=False, normalize_teencode=True, emoji="demojize", word_segment="vncorenlp"):
+    def __init__(self, lowercase=False, normalize_teencode=True, emoji="demojize", word_segment="vncorenlp", include_emoji_explanation=False):
+        self.include_emoji_explanation = include_emoji_explanation
         self.kwargs = dict(
             lowercase=lowercase,
             normalize_teencode_=normalize_teencode,
@@ -253,17 +254,16 @@ class TextPreprocessor:
 
     @classmethod
     def from_config(cls, text_cfg):
-        return cls(**dict(text_cfg))
+        raw = dict(text_cfg)
+        # cache_dir là đường dẫn file cache, không phải tham số chuẩn hóa câu
+        allowed = {"lowercase", "normalize_teencode", "emoji", "word_segment", "include_emoji_explanation"}
+        return cls(**{k: raw[k] for k in allowed if k in raw})
 
     def __call__(self, text: str) -> str:
         return clean_text(text, **self.kwargs)
 
     def _cache_file(self, cache_dir):
-        # key gồm cả phiên bản pipeline và các bảng tra: sửa code hay bảng thì cache cũ không còn được dùng
-        state = {"kwargs": self.kwargs, "version": PREPROCESS_VERSION, "teencode": TEENCODE,
-                 "case_sensitive": sorted(CASE_SENSITIVE_TEENCODE), "emoji_vi": EMOJI_VI}
-        key = hashlib.md5(json.dumps(state, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:8]
-        return Path(cache_dir) / f"text_cache_{key}.json"
+        return Path(cache_dir) / "01a_text_preprocessing.json"
 
     def process_all(self, texts, cache_dir=None):
         cache = {}
@@ -277,5 +277,18 @@ class TextPreprocessor:
 
         if cache_file and missing:
             cache_file.parent.mkdir(parents=True, exist_ok=True)
-            cache_file.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            cache_file.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
         return [cache[t] for t in texts]
+
+    def process_record(self, record: dict, emoji_explanation_text: str = "") -> dict:
+        processed = dict(record)
+        processed["caption_processed"] = self(record.get("caption", ""))
+        if self.include_emoji_explanation:
+            processed["emoji_explanation"] = emoji_explanation_text.strip()
+        return processed
+
+    def process_records(self, records, emoji_annotations=None):
+        annotations = emoji_annotations or {}
+        if isinstance(records, dict):
+            return {key: self.process_record(value, annotations.get(str(key), "")) for key, value in records.items()}
+        return [self.process_record(value, annotations.get(str(index), "")) for index, value in enumerate(records)]

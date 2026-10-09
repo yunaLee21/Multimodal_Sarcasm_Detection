@@ -137,13 +137,9 @@ def test_clean_ocr_drops_junk_lines_and_caption_duplicates():
     assert clean_ocr("", "abc") == ""
 
 
-def test_text_cache_key_depends_on_pipeline_version(tmp_path, monkeypatch):
-    import vimmsd.data.preprocessing as pp
-
+def test_text_cache_file_has_fixed_name(tmp_path):
     pre = TextPreprocessor(emoji="keep", word_segment=False)
-    before = pre._cache_file(tmp_path)
-    monkeypatch.setattr(pp, "PREPROCESS_VERSION", pp.PREPROCESS_VERSION + 1)
-    assert pre._cache_file(tmp_path) != before
+    assert pre._cache_file(tmp_path).name == "01a_text_preprocessing.json"
 
 
 def test_clean_text_empty_and_whitespace():
@@ -197,12 +193,49 @@ def test_load_and_split(fake_data):
     assert not {r["id"] for r in train} & {r["id"] for r in test}
 
 
+def test_from_config_ignores_cache_dir():
+    cfg = load_config("configs/base.yaml")
+    pre = TextPreprocessor.from_config(cfg.data.text)
+    assert pre.kwargs["emoji_mode"] == "demojize"
+    pre = TextPreprocessor.from_config({
+        "emoji": "keep", "word_segment": False, "cache_dir": "attached/cache",
+    })
+    assert pre.kwargs["emoji_mode"] == "keep"
+    assert "cache_dir" not in pre.kwargs
+
+
+def test_build_text_cache_is_reused(fake_data):
+    from vimmsd.data.dataset import build_text_cache, text_cache_dir
+
+    cache = fake_data / "cache"
+    cfg = load_config("configs/base.yaml", overrides=[
+        f"paths.local.data_dir={fake_data}",
+        f"paths.local.cache_dir={cache}",
+        "data.train_json=train.json",
+        "data.public_test_json=missing-public.json",
+        "data.private_test_json=missing-private.json",
+        "data.text.word_segment=false",
+        "data.text.emoji=keep",
+    ], env="local")
+    assert text_cache_dir(cfg) == str(cache)
+    cache_file, n_captions, used = build_text_cache(cfg)
+    assert n_captions == 40 and used == ["train.json"] and cache_file.exists()
+
+    records = load_records(fake_data / "train.json", fake_data / "images", {l: i for i, l in enumerate(LABELS)})
+    ds = ViMMSDDataset(records, text_preprocessor=TextPreprocessor.from_config(cfg.data.text), cache_dir=cache)
+    assert "không" in ds.texts[0]
+    # lần sau chỉ đọc file, không ghi thêm key mới
+    before = cache_file.read_text(encoding="utf-8")
+    TextPreprocessor.from_config(cfg.data.text).process_all([r["caption"] for r in records], cache_dir=cache)
+    assert cache_file.read_text(encoding="utf-8") == before
+
+
 def test_batch_shapes(fake_data):
     records = load_records(fake_data / "train.json", fake_data / "images", {l: i for i, l in enumerate(LABELS)})
     pre = TextPreprocessor(emoji="keep", word_segment=False)
     ds = ViMMSDDataset(records, text_preprocessor=pre, cache_dir=fake_data / "cache")
     assert "không" in ds.texts[0] and "#" not in ds.texts[0]
-    assert list((fake_data / "cache").glob("text_cache_*.json"))
+    assert (fake_data / "cache" / "01a_text_preprocessing.json").exists()
 
     batch = ViMMSDCollator(StubTokenizer(), StubImageProcessor())([ds[i] for i in range(8)])
     assert batch["input_ids"].shape == batch["attention_mask"].shape
