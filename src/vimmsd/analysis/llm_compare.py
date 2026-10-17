@@ -29,8 +29,20 @@ def build_instruction(labels):
     return INSTRUCTION.format(label_list=label_list)
 
 
-def build_question(caption):
-    return f'Caption: "{caption}"\nNhãn:'
+def build_question(caption, metadata=None):
+    parts = []
+    if caption:
+        parts.append(f'Caption: "{caption}"')
+    if metadata:
+        if isinstance(metadata, dict):
+            if metadata.get("ocr"):
+                parts.append(f'Chữ trong ảnh (OCR): "{metadata["ocr"]}"')
+            if metadata.get("description"):
+                parts.append(f'Mô tả ảnh: "{metadata["description"]}"')
+        elif isinstance(metadata, str) and metadata.strip():
+            parts.append(f'Thông tin ảnh: "{metadata.strip()}"')
+    parts.append("Nhãn:")
+    return "\n".join(parts)
 
 
 def parse_label(output, labels):
@@ -60,21 +72,22 @@ class HFVisionLanguageClassifier:
         self.labels = labels
         self.max_new_tokens = max_new_tokens
 
-    def _messages(self, caption, examples):
+    def _messages(self, caption, examples, metadata=None):
         messages = [{"role": "system", "content": [{"type": "text", "text": build_instruction(self.labels)}]}]
         images = []
         for ex in examples:  # few-shot: mỗi ví dụ là 1 lượt hỏi-đáp trước câu hỏi thật
+            ex_meta = ex.get("metadata") or {k: ex[k] for k in ("ocr", "description") if k in ex and ex[k]}
             messages.append({"role": "user", "content": [{"type": "image"},
-                                                         {"type": "text", "text": build_question(ex["caption"])}]})
+                                                         {"type": "text", "text": build_question(ex.get("caption", ""), ex_meta)}]})
             messages.append({"role": "assistant", "content": [{"type": "text", "text": ex["label_name"]}]})
             images.append(Image.open(ex["image_path"]).convert("RGB"))
         messages.append({"role": "user", "content": [{"type": "image"},
-                                                     {"type": "text", "text": build_question(caption)}]})
+                                                     {"type": "text", "text": build_question(caption, metadata)}]})
         return messages, images
 
     @torch.no_grad()
-    def __call__(self, image_path, caption, examples=()):
-        messages, images = self._messages(caption, examples)
+    def __call__(self, image_path, caption="", metadata=None, examples=()):
+        messages, images = self._messages(caption, examples, metadata=metadata)
         images.append(Image.open(image_path).convert("RGB"))
         prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True)
         inputs = self.processor(text=[prompt], images=images, return_tensors="pt").to(self.model.device)
@@ -91,10 +104,10 @@ class VinternClassifier:
         self.max_new_tokens = max_new_tokens
 
     @torch.no_grad()
-    def __call__(self, image_path, caption, examples=()):
+    def __call__(self, image_path, caption="", metadata=None, examples=()):
         if examples:
             raise NotImplementedError("VinternClassifier chỉ hỗ trợ zero-shot")
-        question = "<image>\n" + build_instruction(self.labels) + "\n" + build_question(caption)
+        question = "<image>\n" + build_instruction(self.labels) + "\n" + build_question(caption, metadata)
         return self.model.chat(self.tokenizer, vintern_pixel_values(image_path), question,
                                dict(max_new_tokens=self.max_new_tokens, do_sample=False))
 
@@ -109,7 +122,7 @@ def select_few_shot_examples(records, labels, k_per_class=1, seed=0):
     return examples
 
 
-def evaluate_llm(classifier, records, labels, examples=(), out_path=None):
+def evaluate_llm(classifier, records, labels, examples=(), out_path=None, use_metadata=False):
     """Chạy LLM trên từng mẫu, ghi output thô ra JSONL (chạy tiếp được nếu bị ngắt), trả về metrics."""
     done = {}
     if out_path and Path(out_path).exists():
@@ -123,7 +136,8 @@ def evaluate_llm(classifier, records, labels, examples=(), out_path=None):
             if r["id"] in done:
                 rows.append(done[r["id"]])
                 continue
-            raw = classifier(r["image_path"], r["caption"], examples)
+            meta = {k: r[k] for k in ("ocr", "description") if k in r and r[k]} if use_metadata else None
+            raw = classifier(r["image_path"], r.get("caption", ""), metadata=meta, examples=examples)
             pred = parse_label(raw, labels)
             row = {"id": r["id"], "label": labels[r["label"]], "pred": pred, "raw": raw}
             rows.append(row)
