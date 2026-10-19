@@ -84,8 +84,10 @@ def build_model(cfg):
     if m.modality not in MODALITY_NEEDS:
         raise ValueError(f"model.modality phải thuộc {list(MODALITY_NEEDS)}, nhận được {m.modality!r}")
     needs_text, needs_image = MODALITY_NEEDS[m.modality]
-    text_encoder = TextEncoder(m.text_encoder.name, m.text_encoder.freeze) if needs_text else None
-    image_encoder = ImageEncoder(m.image_encoder.name, m.image_encoder.freeze) if needs_image else None
+    text_encoder = TextEncoder(m.text_encoder.name, m.text_encoder.freeze,
+                               m.text_encoder.get("unfreeze_last_n", 0)) if needs_text else None
+    image_encoder = ImageEncoder(m.image_encoder.name, m.image_encoder.freeze,
+                                 m.image_encoder.get("unfreeze_last_n", 0)) if needs_image else None
     return SarcasmClassifier(
         modality=m.modality,
         text_encoder=text_encoder,

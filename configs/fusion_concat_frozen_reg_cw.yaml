@@ -1,0 +1,5 @@
+# Phase 4, mục 1 + 2: fusion_concat_frozen_reg cộng class weight sqrt_inverse cho lớp hiếm.
+# sqrt_inverse thay vì inverse: inverse cho text-sarcasm (62 mẫu train) nặng gấp ~78 lần not-sarcasm, sqrt còn ~9 lần.
+inherit: fusion_concat_frozen_reg.yaml
+loss:
+  class_weight: sqrt_inverse

@@ -1,11 +1,13 @@
 import torch.nn as nn
 from transformers import AutoConfig, AutoImageProcessor, AutoModel, CLIPVisionModel
 
+from vimmsd.models.freezing import freeze_encoder
+
 
 class ImageEncoder(nn.Module):
     """Wrapper CLIP vision (mặc định) hoặc ViT: trả về embedding từng patch và vector pooled."""
 
-    def __init__(self, name="openai/clip-vit-base-patch32", freeze=True):
+    def __init__(self, name="openai/clip-vit-base-patch32", freeze=True, unfreeze_last_n=0):
         super().__init__()
         model_type = AutoConfig.from_pretrained(name).model_type
         self.is_clip = model_type in {"clip", "clip_vision_model"}
@@ -14,13 +16,14 @@ class ImageEncoder(nn.Module):
         self.image_processor = AutoImageProcessor.from_pretrained(name)
         self.hidden_size = self.model.config.hidden_size
         self.frozen = freeze
-        if freeze:
-            self.model.requires_grad_(False)
+        self.unfrozen_blocks = freeze_encoder(self.model, freeze, unfreeze_last_n)
 
     def train(self, mode=True):
         super().train(mode)
         if self.frozen:
             self.model.eval()
+            for block in self.unfrozen_blocks:
+                block.train(mode)
         return self
 
     def forward(self, pixel_values):

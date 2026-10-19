@@ -640,3 +640,237 @@ def test_named_text_cache_checks_pipeline_key(tmp_path):
     assert pre.process_all(["ko mua đc"], cache_dir=tmp_path) == ["không mua được"]
     (tmp_path / "text_preprocessed.json").write_text(json.dumps({"ko mua đc": "kết quả cũ"}), encoding="utf-8")
     assert pre.process_all(["ko mua đc"], cache_dir=tmp_path) == ["không mua được"]
+
+
+def _tiny_encoders():
+    from transformers import CLIPVisionConfig, CLIPVisionModel, RobertaConfig, RobertaModel, ViTConfig, ViTModel
+
+    small = dict(hidden_size=16, num_hidden_layers=3, num_attention_heads=2, intermediate_size=32)
+    return {
+        "roberta": RobertaModel(RobertaConfig(vocab_size=50, max_position_embeddings=40, **small)),
+        "clip": CLIPVisionModel(CLIPVisionConfig(image_size=32, patch_size=16, **small)),
+        "vit": ViTModel(ViTConfig(image_size=32, patch_size=16, **small)),
+    }
+
+
+def _block_list(model):
+    lists = [m for m in model.modules() if isinstance(m, torch.nn.ModuleList)]
+    assert len(lists) == 1  # mỗi encoder tí hon chỉ có 1 danh sách block, tên khác nhau giữa các bản transformers
+    return lists[0]
+
+
+def _grads_after_backward(model, kind):
+    if kind == "roberta":
+        out = model(input_ids=torch.randint(5, 50, (2, 6)))
+    else:
+        out = model(pixel_values=torch.randn(2, 3, 32, 32))
+    # vector được đem đi concat: CLIP pooler_output (qua post_layernorm), ViT/RoBERTa token đầu
+    pooled = out.pooler_output if kind == "clip" else out.last_hidden_state[:, 0]
+    pooled.sum().backward()
+
+
+@pytest.mark.parametrize("kind", ["roberta", "clip", "vit"])
+def test_freeze_encoder_opens_only_last_blocks(kind):
+    from vimmsd.models.freezing import freeze_encoder
+
+    model = _tiny_encoders()[kind]
+    blocks = freeze_encoder(model, freeze=True, unfreeze_last_n=2)
+    layers = _block_list(model)
+    assert all(p.requires_grad for block in layers[1:] for p in block.parameters())
+    assert not any(p.requires_grad for p in layers[0].parameters())
+    # 2 block + LayerNorm cuối (CLIP post_layernorm, ViT layernorm); RoBERTa không có LayerNorm chung sau encoder
+    norms = blocks[2:]
+    assert len(norms) == (0 if kind == "roberta" else 1) and all(isinstance(m, torch.nn.LayerNorm) for m in norms)
+
+    # tham số được mở đều nằm trên đường tới vector pooled, phần đóng băng không nhận gradient
+    _grads_after_backward(model, kind)
+    for name, p in model.named_parameters():
+        if kind == "vit" and "pooler" in name:
+            continue  # pooler của ViT không dùng (lấy token CLS), luôn đóng băng
+        assert (p.grad is not None) == p.requires_grad, name
+
+    assert freeze_encoder(model, freeze=True) == []
+    assert not any(p.requires_grad for p in model.parameters())
+
+
+def test_freeze_encoder_rejects_bad_unfreeze_last_n():
+    from vimmsd.models.freezing import freeze_encoder
+
+    model = _tiny_encoders()["roberta"]
+    with pytest.raises(ValueError):
+        freeze_encoder(model, freeze=True, unfreeze_last_n=4)  # chỉ có 3 block
+    with pytest.raises(ValueError):
+        freeze_encoder(model, freeze=False, unfreeze_last_n=1)  # freeze: false đã fine-tune toàn bộ
+    assert freeze_encoder(model, freeze=False) == []
+    assert all(p.requires_grad for p in model.parameters())
+
+
+def test_text_encoder_partial_unfreeze_train_mode_and_grads(monkeypatch):
+    from vimmsd.models import text_encoder
+
+    tiny = _tiny_encoders()["roberta"]
+    monkeypatch.setattr(text_encoder.AutoModel, "from_pretrained", lambda name: tiny)
+    monkeypatch.setattr(text_encoder.AutoTokenizer, "from_pretrained", lambda name: None)
+    enc = text_encoder.TextEncoder("tiny", freeze=True, unfreeze_last_n=1)
+
+    enc.train()
+    layers = enc.model.encoder.layer
+    assert layers[2].training and not layers[0].training and not enc.model.embeddings.training
+    enc.eval()
+    assert not layers[2].training
+
+    enc.train()
+    ids = torch.randint(5, 50, (2, 6))
+    enc(ids, torch.ones_like(ids))["pooled"].sum().backward()
+    assert all(p.grad is not None for p in layers[2].parameters())
+    assert all(p.grad is None for p in layers[0].parameters())
+    assert all(p.grad is None for p in enc.model.embeddings.parameters())
+
+
+def test_image_encoder_partial_unfreeze_reaches_pooler(monkeypatch):
+    from vimmsd.models import image_encoder
+
+    tiny = _tiny_encoders()["clip"]
+    monkeypatch.setattr(image_encoder.AutoConfig, "from_pretrained", lambda name: tiny.config)
+    monkeypatch.setattr(image_encoder.CLIPVisionModel, "from_pretrained", lambda name: tiny)
+    monkeypatch.setattr(image_encoder.AutoImageProcessor, "from_pretrained", lambda name: None)
+    enc = image_encoder.ImageEncoder("tiny", freeze=True, unfreeze_last_n=1)
+
+    enc.train()
+    enc(torch.randn(2, 3, 32, 32))["pooled"].sum().backward()
+    layers = _block_list(enc.model)
+    assert all(p.grad is not None for p in layers[2].parameters())
+    assert all(p.grad is None for p in layers[0].parameters())
+    # post_layernorm (tạo pooler_output) cũng được mở và nhận gradient
+    norm = enc.unfrozen_blocks[-1]
+    assert isinstance(norm, torch.nn.LayerNorm) and norm.weight.grad is not None
+
+
+@pytest.mark.parametrize("name, modality, text_freeze, image_freeze, lr_head", [
+    ("text_only_frozen", "text", (True, 0), None, 1e-3),
+    ("image_only_frozen", "image", None, (True, 0), 1e-3),
+    ("fusion_concat_frozen", "concat", (True, 0), (True, 0), 1e-3),
+    ("fusion_concat_ftlast", "concat", (True, 2), (True, 2), 1e-4),
+])
+def test_phase4_configs(name, modality, text_freeze, image_freeze, lr_head):
+    cfg = load_config(f"configs/{name}.yaml", env="local")
+    m = cfg.model
+    assert cfg.name == name and m.modality == modality
+    assert cfg.train.lr_head == lr_head and cfg.train.epochs == 20
+    for expected, enc in ((text_freeze, m.text_encoder), (image_freeze, m.image_encoder)):
+        if expected is not None:
+            assert (enc.freeze, enc.unfreeze_last_n) == expected
+
+
+def test_split_seed_fixes_split_across_train_seeds(fake_data):
+    from vimmsd.data.dataset import load_all_records
+
+    def test_ids(*overrides):
+        cfg = load_config("configs/base.yaml", overrides=[
+            f"paths.local.data_dir={fake_data}", "data.train_json=train.json", "data.train_image_dir=images",
+            "data.public_test_json=missing.json", "data.private_test_json=missing.json", *overrides], env="local")
+        return sorted(r["id"] for r in load_all_records(cfg)["test"])
+
+    # cùng split_seed thì đổi seed train không đổi tập test; không đặt split_seed thì seed quyết định cách chia
+    assert test_ids("seed=1", "data.split_seed=42") == test_ids("seed=2", "data.split_seed=42") == test_ids("seed=42")
+    assert test_ids("seed=1") != test_ids("seed=42")
+
+
+def test_concat_fusion_projection_and_modality_dropout():
+    from vimmsd.models.fusion import ConcatFusion
+
+    B, H = 64, 32
+    text = {"pooled": torch.randn(B, H) + 1.0}
+    image = {"pooled": torch.randn(B, H) * 10}
+    plain = ConcatFusion(text_dim=H, image_dim=H)
+    assert torch.equal(plain(text, image), torch.cat([text["pooled"], image["pooled"]], -1))  # mặc định như Phase 4
+
+    torch.manual_seed(0)
+    fusion = ConcatFusion(text_dim=H, image_dim=H, proj_dim=8, image_drop_prob=0.5, text_drop_prob=0.5)
+    assert fusion.out_dim == 16
+    out = fusion.train()(text, image)
+    t_zero, i_zero = (out[:, :8] == 0).all(-1), (out[:, 8:] == 0).all(-1)
+    assert i_zero.any() and t_zero.any() and not (t_zero & i_zero).any()  # không bỏ cả 2 modality của 1 mẫu
+    out_eval = fusion.eval()(text, image)
+    assert not (out_eval[:, 8:] == 0).all(-1).any()  # eval không bỏ gì
+    with pytest.raises(ValueError):
+        ConcatFusion(text_dim=H, image_dim=H, image_drop_prob=1.0)
+
+
+@pytest.mark.parametrize("name, modality, class_weight, proj_dim", [
+    ("fusion_concat_frozen_reg", "concat", None, 256),
+    ("fusion_concat_frozen_reg_cw", "concat", "sqrt_inverse", 256),
+    ("text_only_frozen_cw", "text", "sqrt_inverse", None),
+])
+def test_phase4_reg_configs(name, modality, class_weight, proj_dim):
+    cfg = load_config(f"configs/{name}.yaml", env="local")
+    assert cfg.model.modality == modality and cfg.loss.get("class_weight") == class_weight
+    assert (cfg.model.get("fusion") or {}).get("proj_dim") == proj_dim
+    assert cfg.model.text_encoder.freeze and cfg.train.lr_head == 1e-3
+
+
+def test_run_on_gpus_queue_logs_and_failures(tmp_path):
+    import sys
+
+    from vimmsd.utils.gpu_queue import Job, run_on_gpus
+
+    def job(name, code, check=None):
+        return Job(name, [[sys.executable, "-c", code]], tmp_path / f"{name}.log", check=check)
+
+    show_gpu = "import os; print('INFO epoch 1 gpu', os.environ.get('CUDA_VISIBLE_DEVICES'))"
+    jobs = [job("a", show_gpu), job("b", show_gpu), job("c", "raise SystemExit(3)"),
+            job("d", "pass", check=lambda: "thiếu test_metrics.json")]
+    done = run_on_gpus(jobs, num_gpus=2, summary_pattern=r"INFO epoch")
+    assert [j.name for j in done] == ["a", "b", "c", "d"]
+    status = {j.name: j.error for j in done}
+    assert status["a"] is None and status["b"] is None
+    assert status["c"] == "mã thoát 3" and status["d"] == "thiếu test_metrics.json"
+    used = {(tmp_path / f"{n}.log").read_text().split()[-1] for n in "ab"}
+    assert used <= {"0", "1"}
+    # không có GPU: chạy tuần tự, không đặt CUDA_VISIBLE_DEVICES
+    import os
+
+    cpu = run_on_gpus([job("e", show_gpu)], num_gpus=0)
+    assert cpu[0].error is None
+    assert (tmp_path / "e.log").read_text().split()[-1] == str(os.environ.get("CUDA_VISIBLE_DEVICES"))
+
+
+def test_checkpoint_skips_frozen_params(tmp_path):
+    from vimmsd.utils.checkpoint import load_checkpoint, save_checkpoint
+
+    def make():
+        torch.manual_seed(0)  # "encoder" giống nhau như khi tải cùng weight pretrained
+        model = torch.nn.Sequential(torch.nn.Linear(8, 8), torch.nn.Linear(8, 4))
+        model[0].requires_grad_(False)
+        return model
+
+    model = make()
+    torch.nn.init.constant_(model[1].weight, 0.5)
+    save_checkpoint(tmp_path / "best.pt", model, epoch=3)
+    saved = torch.load(tmp_path / "best.pt", weights_only=False)
+    assert set(saved["model"]) == {"1.weight", "1.bias"} and saved["frozen_omitted"]
+
+    fresh = make()
+    extra = load_checkpoint(tmp_path / "best.pt", fresh)
+    assert extra == {"epoch": 3}
+    assert torch.equal(fresh[1].weight, model[1].weight) and torch.equal(fresh[0].weight, model[0].weight)
+
+    # checkpoint cũ lưu đầy đủ vẫn load được; thiếu parameter đang train thì báo lỗi
+    torch.save({"model": model.state_dict()}, tmp_path / "full.pt")
+    load_checkpoint(tmp_path / "full.pt", make())
+    unfrozen = make().requires_grad_(True)
+    with pytest.raises(RuntimeError, match="không khớp"):
+        load_checkpoint(tmp_path / "best.pt", unfrozen)
+
+
+def test_run_on_gpus_reports_errors_outside_subprocess(tmp_path):
+    import sys
+
+    from vimmsd.utils.gpu_queue import Job, run_on_gpus
+
+    (tmp_path / "file").write_text("")
+    bad = Job("bad", [[sys.executable, "-c", "pass"]], tmp_path / "file" / "run.log")  # không tạo được thư mục log
+    good = Job("good", [[sys.executable, "-c", "pass"]], tmp_path / "good.log")
+    done = run_on_gpus([bad, good], num_gpus=1)
+    assert [j.name for j in done] == ["bad", "good"]
+    assert bad.error and good.error is None

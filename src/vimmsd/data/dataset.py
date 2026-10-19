@@ -349,7 +349,9 @@ def load_all_records(cfg):
 
     labeled = load_records(data_dir / cfg.data.train_json, data_dir / cfg.data.train_image_dir,
                            label2id, image_texts)
-    train, val, test = split_records(labeled, cfg.data.val_ratio, cfg.data.test_ratio, cfg.seed)
+    split_seed = cfg.data.get("split_seed")  # cố định cách chia khi chạy nhiều seed train
+    train, val, test = split_records(labeled, cfg.data.val_ratio, cfg.data.test_ratio,
+                                     cfg.seed if split_seed is None else split_seed)
     splits = {"train": train, "val": val, "test": test}
 
     public_json = cfg.data.get("public_test_json")

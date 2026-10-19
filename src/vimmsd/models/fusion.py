@@ -57,12 +57,43 @@ class ImageOnlyFusion(nn.Module):
 
 
 class ConcatFusion(nn.Module):
-    def __init__(self, text_dim, image_dim, **_):
+    """[t; i] với t = PhoBERT <s>, i = CLIP pooled. Mặc định nối thẳng như Phase 4.
+
+    Các tuỳ chọn chống việc head học thuộc tập train qua vector ảnh cố định (thấy ở fusion_concat_frozen:
+    train loss giảm nhanh hơn text-only, early stop sớm, lớp hiếm tụt):
+    - `proj_dim`: LayerNorm + Linear(proj_dim) riêng mỗi nhánh trước khi nối, để 2 vector cùng thang đo
+      (<s> của PhoBERT không qua LayerNorm cuối, pooled của CLIP đã qua `post_layernorm`).
+    - `image_feature_dropout`: dropout thường trên vector ảnh, chỉ khi train.
+    - `image_drop_prob` / `text_drop_prob`: modality dropout, mỗi mẫu train bị bỏ hẳn vector ảnh / text
+      (thay bằng 0) với xác suất tương ứng; không bao giờ bỏ cả hai trong cùng một mẫu (giữ text).
+      Bỏ ảnh buộc head phải phân loại được chỉ từ text, nên phần text không bị "loãng"."""
+
+    def __init__(self, text_dim, image_dim, proj_dim=None, image_feature_dropout=0.0,
+                 image_drop_prob=0.0, text_drop_prob=0.0, **_):
         super().__init__()
-        self.out_dim = text_dim + image_dim
+        if not (0 <= image_drop_prob < 1 and 0 <= text_drop_prob < 1):
+            raise ValueError("image_drop_prob và text_drop_prob phải trong [0, 1)")
+        self.image_drop_prob = float(image_drop_prob)
+        self.text_drop_prob = float(text_drop_prob)
+        self.image_feature_dropout = nn.Dropout(image_feature_dropout)
+        if proj_dim:
+            self.text_proj = nn.Sequential(nn.LayerNorm(text_dim), nn.Linear(text_dim, proj_dim))
+            self.image_proj = nn.Sequential(nn.LayerNorm(image_dim), nn.Linear(image_dim, proj_dim))
+            self.out_dim = 2 * proj_dim
+        else:
+            self.text_proj = self.image_proj = nn.Identity()
+            self.out_dim = text_dim + image_dim
 
     def forward(self, text, image):
-        return torch.cat([text["pooled"], image["pooled"]], dim=-1)
+        t = self.text_proj(text["pooled"])
+        i = self.image_proj(self.image_feature_dropout(image["pooled"]))
+        if self.training and (self.image_drop_prob or self.text_drop_prob):
+            B = t.shape[0]
+            drop_image = torch.rand(B, device=t.device) < self.image_drop_prob
+            drop_text = (torch.rand(B, device=t.device) < self.text_drop_prob) & ~drop_image
+            i = i * (~drop_image).unsqueeze(-1).to(i.dtype)
+            t = t * (~drop_text).unsqueeze(-1).to(t.dtype)
+        return torch.cat([t, i], dim=-1)
 
 
 class CrossAttentionBlock(nn.Module):

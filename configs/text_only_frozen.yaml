@@ -1,0 +1,8 @@
+# Phase 4, mốc so sánh: PhoBERT đóng băng, chỉ train MLP head (cùng chế độ với fusion_concat_frozen).
+inherit: text_only.yaml
+model:
+  text_encoder:
+    freeze: true
+train:
+  lr_head: 1.0e-3   # chỉ train head trên feature cố định nên cần lr cao hơn 1e-4 của base
+  epochs: 20        # head trên feature cố định hội tụ chậm (text_only_frozen còn tăng ở epoch 10); early stopping vẫn dừng sớm

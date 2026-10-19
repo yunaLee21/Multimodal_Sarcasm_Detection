@@ -27,6 +27,7 @@ data:
   labels: [not-sarcasm, text-sarcasm, image-sarcasm, multi-sarcasm]
   val_ratio: 0.1     # val/test chia stratified từ tập train có nhãn
   test_ratio: 0.1
+  split_seed: null  # null = dùng seed; đặt cố định (vd 42) để nhiều seed train dùng chung train/val/test
   max_length: 256           # giới hạn của PhoBERT; p95 độ dài caption sau làm sạch ≈ 251 token
   max_caption_length: 200   # khi có text từ ảnh: caption cắt trước còn tối đa 200 token, phần còn lại cho segment 2
   text:
@@ -55,9 +56,11 @@ model:
   text_encoder:
     name: vinai/phobert-base
     freeze: false
+    unfreeze_last_n: 0   # chỉ dùng khi freeze: true, mở lại N block cuối để fine-tune nhẹ (0 = đóng băng hết)
   image_encoder:
     name: openai/clip-vit-base-patch32
     freeze: true
+    unfreeze_last_n: 0   # như trên; CLIP mở thêm post_layernorm, ViT mở thêm layernorm cuối
   fusion: {}
   head_hidden: 512
   dropout: 0.2

@@ -1,0 +1,5 @@
+# Phase 4, mốc so sánh cho mục 2: text_only_frozen cộng class weight sqrt_inverse (cùng loss với fusion_concat_frozen_reg_cw),
+# để tách phần cải thiện do class weight khỏi phần do regularize nhánh ảnh.
+inherit: text_only_frozen.yaml
+loss:
+  class_weight: sqrt_inverse
