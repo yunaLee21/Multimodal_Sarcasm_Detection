@@ -344,3 +344,29 @@ def test_trainer_runs_with_new_heads(monkeypatch, tmp_path, head_type):
     assert model.prior_shift is None and set(metrics) >= {"macro_f1", "per_class"}
     fresh = _tiny_classifier(monkeypatch, dict(cfg.model.head))
     load_checkpoint(tmp_path / "best.pt", fresh)
+
+
+@pytest.mark.parametrize("load_in_4bit", [False, True])
+def test_teacher_4bit_only_changes_model_kwargs(monkeypatch, load_in_4bit):
+    import transformers
+
+    seen = {}
+
+    class FakeModel:
+        def eval(self):
+            return self
+
+    def fake_model(name, **kwargs):
+        seen.update(kwargs)
+        return FakeModel()
+
+    processor = type("P", (), {"tokenizer": type("T", (), {})()})()
+    monkeypatch.setattr(transformers.AutoModelForImageTextToText, "from_pretrained", fake_model)
+    monkeypatch.setattr(transformers.AutoProcessor, "from_pretrained", lambda name, **kw: processor)
+    R.TeacherVLM("fake", load_in_4bit=load_in_4bit)
+    assert seen["device_map"] == "cuda"
+    quant = seen.get("quantization_config")
+    if load_in_4bit:
+        assert quant.load_in_4bit and quant.bnb_4bit_quant_type == "nf4" and quant.bnb_4bit_use_double_quant
+    else:
+        assert quant is None

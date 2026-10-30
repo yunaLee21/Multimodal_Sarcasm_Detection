@@ -7,12 +7,13 @@
     # cả lô, mỗi GPU một shard (chạy trong tmux)
     CUDA_VISIBLE_DEVICES=0 python scripts/generate_rationales.py --split train --ids-file .../batch2.txt --k 3 \\
         --num-shards 2 --shard 0
+    # GPU 12 GB: thêm --load-in-4bit; k=5 thì cần --batch-size 2 (batch 4 hết VRAM)
     # rationalization nhóm 3: đưa nhãn đúng, yêu cầu giải thích
     python scripts/generate_rationales.py --split train --ids-file <rationales>/ids/group3.txt --k 1 --with-label
 
 Output: <rationales>/raw/<prompt_version>[_label]/<split>.shard<i>of<n>.jsonl, mỗi dòng một lần sinh
-{id, split, sample_idx, label (nhãn gốc, chỉ để đánh giá), with_label, output, parsed, teacher, prompt_version,
-temperature, seconds}. Chạy tiếp được: mẫu đã đủ k lần sinh thì bỏ qua. Không bao giờ dùng output này để lọc
+{id, split, sample_idx, label (nhãn gốc, chỉ để đánh giá), with_label, output, parsed, teacher, load_in_4bit,
+prompt_version, temperature, seconds}. Chạy tiếp được: mẫu đã đủ k lần sinh thì bỏ qua. Không bao giờ dùng output này để lọc
 mẫu val/test (chỉ đánh giá zero-shot)."""
 import argparse
 import json
@@ -45,6 +46,7 @@ def main():
     parser.add_argument("--model", default="Qwen/Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--max-pixels", type=int, default=640 * 28 * 28)
     parser.add_argument("--device-map", default="cuda", help='"auto" để chia model lớn ra nhiều GPU')
+    parser.add_argument("--load-in-4bit", action="store_true", help="lượng tử hoá 4-bit (nf4) cho GPU ít VRAM")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-shards", type=int, default=1)
     parser.add_argument("--shard", type=int, default=0)
@@ -83,7 +85,8 @@ def main():
     if not todo:
         return
 
-    teacher = TeacherVLM(args.model, max_pixels=args.max_pixels, device_map=args.device_map)
+    teacher = TeacherVLM(args.model, max_pixels=args.max_pixels, device_map=args.device_map,
+                         load_in_4bit=args.load_in_4bit)
     failed, streak = [], 0
     with open(out_path, "a", encoding="utf-8") as f, tqdm(total=len(todo), desc="teacher") as bar:
         for start in range(0, len(todo), args.batch_size):
@@ -111,7 +114,7 @@ def main():
                     f.write(json.dumps({
                         "id": sid, "split": args.split, "sample_idx": done.get(sid, 0) + j, "label": rec["label_name"],
                         "with_label": args.with_label, "output": text, "parsed": parse_teacher_output(text),
-                        "teacher": args.model, "prompt_version": version, "temperature": args.temperature,
+                        "teacher": args.model, "load_in_4bit": args.load_in_4bit, "prompt_version": version, "temperature": args.temperature,
                         "seconds": round(seconds, 2)}, ensure_ascii=False) + "\n")
             f.flush()
             bar.update(len(chunk))

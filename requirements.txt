@@ -1,6 +1,8 @@
 torch
 torchvision
 transformers>=4.45
+accelerate           # device_map khi nạp VLM teacher
+bitsandbytes         # generate_rationales.py --load-in-4bit
 py_vncorenlp         # tách từ VnCoreNLP cho PhoBERT (cần Java >= 8)
 underthesea          # tách từ dự phòng (word_segment: underthesea)
 emoji                # xử lý emoji trong caption

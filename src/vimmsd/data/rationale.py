@@ -402,18 +402,26 @@ def split_records(cfg, split, with_ocr=True):
 class TeacherVLM:
     """Sinh reasoning bằng VLM của transformers (mặc định Qwen/Qwen2.5-VL-7B-Instruct).
     k lần sinh mỗi mẫu bằng num_return_sequences (cần temperature > 0). device_map="auto" để chia model lớn
-    (vd bản 32B) ra nhiều GPU; khi đó chạy 1 tiến trình thay vì mỗi GPU một shard."""
+    (vd bản 32B) ra nhiều GPU; khi đó chạy 1 tiến trình thay vì mỗi GPU một shard.
+    load_in_4bit=True: lượng tử hoá nf4 (bitsandbytes) cho GPU ít VRAM, bản 7B còn khoảng 5.4 GB."""
 
-    def __init__(self, model_name="Qwen/Qwen2.5-VL-7B-Instruct", max_pixels=640 * 28 * 28, device_map="cuda"):
-        from transformers import AutoModelForImageTextToText, AutoProcessor
+    def __init__(self, model_name="Qwen/Qwen2.5-VL-7B-Instruct", max_pixels=640 * 28 * 28, device_map="cuda",
+                 load_in_4bit=False):
+        from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
 
         from vimmsd.data.image_text import _dtype_kwargs, vlm_dtype
 
         self.model_name = model_name
         self.processor = AutoProcessor.from_pretrained(model_name, min_pixels=128 * 28 * 28, max_pixels=max_pixels)
         self.processor.tokenizer.padding_side = "left"  # sinh theo batch cần pad bên trái
-        self.model = AutoModelForImageTextToText.from_pretrained(
-            model_name, device_map=device_map, **_dtype_kwargs(vlm_dtype())).eval()
+        if load_in_4bit:
+            dtype_kwargs = {"quantization_config": BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=vlm_dtype(),
+                bnb_4bit_use_double_quant=True)}
+        else:
+            dtype_kwargs = _dtype_kwargs(vlm_dtype())
+        self.model = AutoModelForImageTextToText.from_pretrained(model_name, device_map=device_map,
+                                                                 **dtype_kwargs).eval()
 
     def generate(self, images, prompts, k=1, temperature=0.7, top_p=0.9, max_new_tokens=512):
         """images: list[PIL.Image], prompts: list[str] -> list[list[str]] (k chuỗi mỗi mẫu)."""
