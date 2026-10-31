@@ -161,7 +161,7 @@ function renderLabelOptions() {
 }
 
 async function loadList() {
-  const data = await api("/api/samples", { split: $("split").value, label: $("label").value, q: $("query").value, page: state.page });
+  const data = await api("api/samples", { split: $("split").value, label: $("label").value, q: $("query").value, page: state.page });
   Object.assign(state, { items: data.items, total: data.total, pageSize: data.page_size });
   $("total").textContent = `${data.total} mẫu`;
   const pages = Math.max(1, Math.ceil(data.total / data.page_size));
@@ -183,7 +183,7 @@ function renderList() {
 async function openSample(id) {
   const split = $("split").value;
   const token = ++state.token;
-  const sample = await api("/api/sample", { split, id });
+  const sample = await api("api/sample", { split, id });
   if (token !== state.token) return;
   state.current = { ...sample, split };
   $("results").replaceChildren();
@@ -195,7 +195,7 @@ async function openSample(id) {
 function renderSample() {
   const s = state.current;
   const image = s.has_image
-    ? el("img", { id: "sampleImage", src: `/image?${new URLSearchParams({ split: s.split, id: s.id })}`, alt: `Ảnh của mẫu ${s.id}` })
+    ? el("img", { id: "sampleImage", src: `image?${new URLSearchParams({ split: s.split, id: s.id })}`, alt: `Ảnh của mẫu ${s.id}` })
     : el("div", { class: "placeholder", textContent: "Không tìm thấy file ảnh của mẫu này." });
   const textBlock = (title, text) => text ? el("div", { class: "textblock small" }, el("b", { textContent: title }), text) : null;
   $("sample").replaceChildren(
@@ -288,7 +288,7 @@ async function runInference() {
     if (token !== state.token) return;
     cards[i].lastChild.textContent = "Đang nạp model và suy luận…";
     try {
-      const r = await api("/api/predict", { split: s.split, id: s.id, run: id, prior });
+      const r = await api("api/predict", { split: s.split, id: s.id, run: id, prior });
       if (token !== state.token) return;
       renderResult(cards[i], r);
       results.push(r);
@@ -313,7 +313,7 @@ $("query").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout
 $("prev").onclick = () => { state.page--; loadList().catch(showError); };
 $("next").onclick = () => { state.page++; loadList().catch(showError); };
 $("random").onclick = async () => {
-  const data = await api("/api/samples", { split: $("split").value, label: $("label").value, q: $("query").value, random: 1 });
+  const data = await api("api/samples", { split: $("split").value, label: $("label").value, q: $("query").value, random: 1 });
   if (data.item) openSample(data.item.id).catch(showError);
 };
 $("runFilter").oninput = renderRuns;
@@ -326,7 +326,7 @@ $("selectNone").onclick = () => { state.selected.clear(); saveSelection(); rende
 $("run").onclick = () => runInference().catch(showError);
 
 (async function init() {
-  const [meta, runs] = await Promise.all([api("/api/meta"), api("/api/runs")]);
+  const [meta, runs] = await Promise.all([api("api/meta"), api("api/runs")]);
   Object.assign(state, { labels: meta.labels, splits: meta.splits, runs: runs.runs });
   const known = new Set(state.runs.map(r => r.id));
   state.selected = new Set(loadSelection().filter(id => known.has(id)));
