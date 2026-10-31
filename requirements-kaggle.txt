@@ -3,3 +3,4 @@
 py_vncorenlp    # cần Java: kiểm tra `java -version`, thiếu thì `apt-get install -y default-jre`
 underthesea
 emoji
+transformers==4.53.2   # pin: transformers >= 4.54 (ảnh Kaggle mới) làm Vintern/InternVL remote code lỗi 'all_tied_weights_keys'; CLIP/ViT vẫn chạy bình thường
