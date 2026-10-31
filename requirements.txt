@@ -19,4 +19,5 @@ gdown                # cần cho vietocr
 # vietocr (nhận dạng chữ tiếng Việt cho OCR) ghim pillow/einops/gdown bản cũ, nên cài riêng và bỏ qua dependency:
 #   pip install --no-deps vietocr
 kaggle               # download data qua API (chỉ dùng local)
+flask                # web xem dữ liệu (scripts/serve_web.py)
 pytest
