@@ -26,7 +26,7 @@ from tqdm.auto import tqdm
 
 from vimmsd.data.dataset import rationale_dir
 from vimmsd.data.image_io import open_image_rgb
-from vimmsd.data.rationale import (PROMPT_VERSION, TeacherVLM, build_prompt, load_raw, parse_teacher_output,
+from vimmsd.data.rationale import (DATASET_EXAMPLE_IDS, PROMPT_VERSION, TeacherVLM, build_prompt, load_raw, parse_teacher_output,
                                    read_ids, split_records)
 from vimmsd.utils.config import load_config
 
@@ -68,6 +68,7 @@ def main():
         sys.exit(f"{len(unknown)} id không có trong split {args.split}, vd {unknown[:3]}")
     if args.with_label and any(records[i]["label_name"] is None for i in ids):
         sys.exit("--with-label cần nhãn cho mọi mẫu")
+    ids = [i for i in ids if i not in DATASET_EXAMPLE_IDS]  # mẫu đã nằm trong prompt
     ids = ids[args.shard::args.num_shards]
     if args.limit:
         ids = ids[:args.limit]

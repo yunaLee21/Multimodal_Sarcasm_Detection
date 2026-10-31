@@ -179,8 +179,9 @@ def test_parse_teacher_output_variants():
 
 def test_build_prompt_label_hint_and_truncation():
     p = R.build_prompt("cap " * 1000, "")
-    assert "(không có)" in p and "Nhãn đúng" not in p and len(p) < 4000
-    assert "Nhãn đúng của bài đăng này là: image-sarcasm" in R.build_prompt("cap", "chữ", label="image-sarcasm")
+    assert "(none)" in p and "The correct label" not in p and len(p) < 11000
+    assert "image description" not in p.lower() and all(l in R.DATASET_EXAMPLES for l in R.LABELS)
+    assert "The correct label of this post is: image-sarcasm" in R.build_prompt("cap", "chữ", label="image-sarcasm")
 
 
 def _row(sid, label, k_label, idx=0):
