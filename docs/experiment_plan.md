@@ -214,7 +214,7 @@ Kết quả ghi vào `reports/results.md`. Bản tổng hợp riêng đặt ở 
 | 0.1 | Head phân cấp + loss + test | – | có code + test |
 | 0.2 | Nhãn phụ từ nhãn gốc + hiệu chỉnh prior | – | có code + test |
 | 0.3 | Chạy plan `phase4_baselines` (mốc), rồi (a)/(b) phẳng, phân cấp, cascade × 3 seed | S.1, S.2, 0.1, 0.2 | chưa làm |
-| 0.4 | D1: `diagnose_shortcuts.py` + test, chạy trên baseline | 0.3 | chưa có code |
+| 0.4 | D1: `diagnose_shortcuts.py` + test, chạy trên baseline | 0.3 | có code + test, chưa chạy |
 | 0.5 | E1: `knn_eval.py` + test, chạy trên baseline | 0.3 | chưa có code |
 | 1.1 | Đối chiếu định nghĩa nhãn, viết prompt v1 | – | chưa làm |
 | 1.2 | `generate_rationales.py`, `eval_teacher.py`, `make_id_lists.py` | – | có code + test |
