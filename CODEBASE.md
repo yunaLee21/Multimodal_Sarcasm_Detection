@@ -95,6 +95,11 @@ IE403/
 │       │   ├── interpretability.py  # Grad-CAM, attention map visualization
 │       │   └── llm_compare.py       # gọi Vintern/LLM đa modal, so sánh kết quả
 │       │
+│       ├── web/                   # web xem dữ liệu và thử model trên từng mẫu (mục 7.7)
+│       │   ├── inference.py       # DataStore, RunRegistry, InferenceEngine: dùng lại dataset/collator/build_model
+│       │   ├── app.py             # API Flask
+│       │   └── static/index.html  # giao diện, không cần build
+│       │
 │       └── utils/
 │           ├── config.py          # load/parse YAML config thành object, chọn paths theo môi trường
 │           ├── env.py             # detect_env(): VIMMSD_ENV nếu có ("server"), không thì "kaggle" / "colab" / "local"
@@ -117,6 +122,7 @@ IE403/
 │   ├── run_experiments.py    # chạy plan config × seed trên N GPU (dùng gpu_queue), ghi log + status
 │   ├── summarize_results.py  # gộp metrics các seed → bảng trung bình ± độ lệch chuẩn (mặc định chỉ val)
 │   ├── evaluate.py           # entrypoint eval trên test set + xuất confusion matrix
+│   ├── serve_web.py          # web xem dữ liệu, cho từng run suy luận một mẫu để người kiểm tra (mục 7.7)
 │   └── server/               # shell script cho GPU server
 │       ├── setup_env.sh        # tạo venv, cài requirements, kiểm tra GPU / Java, chạy pytest (mục 7.1)
 │       └── prepare_data.sh     # tải data + cache, tạo symlink data/server/*, hoặc sinh lại cache (mục 7.4)
@@ -428,6 +434,20 @@ Thứ tự và cổng quyết định theo `docs/experiment_plan.md`; lệnh đ�
   ```
   Thành viên chạy Kaggle chỉ cần *Add Input* dataset đó.
 - **Kết quả**: với `VIMMSD_ENV=server`, `train.py` ghi thẳng vào `reports/results.md` với cột môi trường là `server`. Thêm loại GPU vào ghi chú (`--note` hoặc dòng plan), vì thời gian train không so được với Kaggle T4.
+
+### 7.7. Web xem dữ liệu và thử model
+
+Chạy trên máy có dữ liệu và checkpoint (GPU server), mở từ máy mình qua SSH tunnel:
+
+```bash
+python scripts/serve_web.py --runs-dir data/server/outputs      # thêm --runs-dir cho output tải từ Kaggle
+ssh -L 7860:localhost:7860 <server>                             # chạy ở máy mình, rồi mở http://localhost:7860
+```
+
+- **Run được nhận** là thư mục có `best.pt` và `config.json`, tìm đệ quy trong `--runs-dir`. Đường dẫn trong `config.json` được thay bằng đường dẫn của máy đang chạy web, nên run train trên Kaggle dùng được ngay. Encoder đóng băng không nằm trong checkpoint, nên lần đầu nạp cần mạng hoặc `HF_HOME` đã có sẵn model.
+- **Mẫu mặc định** là public test (val) và train. `--allow-private` mới hiện private test và điểm test của từng run, vì private test chỉ chấm ở bước cuối.
+- **Tuỳ chọn khác**: `--max-loaded` (số model giữ trong bộ nhớ, mặc định 2), `--device`, `--port`. Mặc định chỉ nghe `127.0.0.1`.
+- `best.pt` được nạp bằng pickle, nên chỉ trỏ `--runs-dir` tới output của nhóm.
 
 ---
 

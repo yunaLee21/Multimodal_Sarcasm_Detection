@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ViMMSD Viewer</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8; --panel: #fff; --line: #dfe2e7; --text: #1b1f27; --muted: #616977;
+  --accent: #2f5fd0; --ok: #15803d; --bad: #c0362c; --bar: #c9d3e8; --hover: #eef1f6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #333842; --text: #e7e9ee; --muted: #9aa2b1;
+    --accent: #7ea2f2; --ok: #4ec27a; --bad: #ef7d73; --bar: #3a4560; --hover: #272b33;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font-size: 16px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+main { display: grid; grid-template-columns: 300px minmax(320px, 1fr) minmax(360px, 1.15fr); gap: 12px; padding: 12px 16px; align-items: start; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+label.field { display: block; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+select, input[type=search], button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+select, input[type=search] { display: block; width: 100%; margin-top: 2px; }
+button { cursor: pointer; }
+button:hover:not(:disabled) { background: var(--hover); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { button.primary { color: #14161a; } }
+button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+#list { list-style: none; margin: 8px 0; padding: 0; max-height: 62vh; overflow: auto; border-top: 1px solid var(--line); }
+#list button { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: 6px 4px; }
+#list button:hover { background: var(--hover); }
+#list button.active { background: var(--hover); box-shadow: inset 3px 0 var(--accent); }
+.clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.badge { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }
+.l-not-sarcasm { background: #64748b; } .l-text-sarcasm { background: #a16207; }
+.l-image-sarcasm { background: #0f766e; } .l-multi-sarcasm { background: #7e3fb5; } .l-none { background: #94a3b8; }
+#sampleImage { display: block; max-width: 100%; max-height: 420px; margin: 0 auto 10px; border-radius: 6px; }
+.placeholder { padding: 40px 12px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; margin-bottom: 10px; }
+.caption { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; margin: 8px 0; }
+.textblock { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.textblock b { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+#runs { max-height: 300px; overflow: auto; margin: 8px 0; border-block: 1px solid var(--line); }
+.run { padding: 5px 2px; border-bottom: 1px solid var(--line); }
+.run:last-child { border-bottom: 0; }
+.run label { display: flex; gap: 6px; align-items: baseline; cursor: pointer; overflow-wrap: anywhere; }
+.run details { margin-left: 22px; }
+summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+table.params { border-collapse: collapse; font-size: 12px; margin: 4px 0; width: 100%; }
+table.params td { padding: 1px 6px 1px 0; vertical-align: top; overflow-wrap: anywhere; }
+table.params td:first-child { color: var(--muted); white-space: nowrap; }
+.card { border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 8px 10px; margin-top: 8px; }
+.card.ok { border-left-color: var(--ok); } .card.bad { border-left-color: var(--bad); }
+.card .name { font-weight: 600; overflow-wrap: anywhere; }
+.verdict-ok { color: var(--ok); font-weight: 600; } .verdict-bad { color: var(--bad); font-weight: 600; }
+.error { color: var(--bad); overflow-wrap: anywhere; }
+.warn { color: #b45309; }
+.prob { display: grid; grid-template-columns: 96px 1fr 44px; gap: 6px; align-items: center; font-size: 12px; }
+.prob .track { height: 10px; background: var(--hover); border-radius: 3px; overflow: hidden; }
+.prob .fill { height: 100%; background: var(--bar); }
+.prob.pred .fill { background: var(--accent); }
+.prob.gold .name-l { font-weight: 700; }
+.prob .val { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { main { grid-template-columns: 1fr; } #list { max-height: 30vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ViMMSD Viewer</h1>
+  <span class="muted small" id="status">Đang tải…</span>
+</header>
+<main>
+  <section aria-label="Chọn mẫu">
+    <h2>Dữ liệu</h2>
+    <label class="field">Tập dữ liệu <select id="split"></select></label>
+    <label class="field">Nhãn <select id="label"><option value="">Tất cả</option></select></label>
+    <label class="field">Tìm theo caption hoặc id <input type="search" id="query"></label>
+    <div class="row spread">
+      <span class="muted small" id="total"></span>
+      <button id="random" title="Chọn ngẫu nhiên trong bộ lọc hiện tại">Ngẫu nhiên</button>
+    </div>
+    <ul id="list"></ul>
+    <div class="row spread">
+      <button id="prev">Trang trước</button>
+      <span class="muted small" id="page"></span>
+      <button id="next">Trang sau</button>
+    </div>
+  </section>
+
+  <section aria-label="Mẫu đang xem">
+    <h2>Mẫu đang xem</h2>
+    <div id="sample"><div class="placeholder">Chọn một mẫu ở cột bên trái.</div></div>
+  </section>
+
+  <section aria-label="Model">
+    <h2>Model</h2>
+    <input type="search" id="runFilter" placeholder="Lọc theo tên model" aria-label="Lọc theo tên model">
+    <div class="row spread small" style="margin-top:6px">
+      <span class="muted" id="runCount"></span>
+      <span class="row">
+        <button id="selectAll">Chọn hết</button>
+        <button id="selectNone">Bỏ chọn</button>
+      </span>
+    </div>
+    <div id="runs"></div>
+    <div class="row spread">
+      <label class="small row"><input type="checkbox" id="prior"> Hiệu chỉnh prior theo val</label>
+      <button class="primary" id="run" disabled>Suy luận</button>
+    </div>
+    <div class="small muted" id="summary" style="margin-top:8px"></div>
+    <div id="results"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = { labels: [], splits: {}, runs: [], selected: new Set(), items: [], total: 0, page: 0, pageSize: 30,
+                current: null, token: 0 };
+const SPLIT_NAMES = { public_test: "Public test (val)", train: "Train", private_test: "Private test" };
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === "class") node.className = value; else node[key] = value;
+  }
+  node.append(...children.filter(c => c != null));
+  return node;
+}
+function badge(label) { return el("span", { class: `badge l-${label || "none"}`, textContent: label || "chưa có nhãn" }); }
+function pct(x) { return `${(x * 100).toFixed(1)}%`; }
+function score(x) { return x == null ? "–" : x.toFixed(4); }
+
+async function api(path, params = {}) {
+  const res = await fetch(`${path}?${new URLSearchParams(params)}`);
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+function saveSelection() {
+  try { localStorage.setItem("vimmsd.selected", JSON.stringify([...state.selected])); } catch (e) {}
+}
+function loadSelection() {
+  try { return JSON.parse(localStorage.getItem("vimmsd.selected")) || []; } catch (e) { return []; }
+}
+
+function renderLabelOptions() {
+  const counts = state.splits[$("split").value].counts;
+  const current = $("label").value;
+  $("label").replaceChildren(el("option", { value: "", textContent: "Tất cả" }),
+    ...state.labels.map(l => el("option", { value: l, textContent: `${l} (${counts[l] || 0})` })));
+  $("label").value = current;
+}
+
+async function loadList() {
+  const data = await api("/api/samples", { split: $("split").value, label: $("label").value, q: $("query").value, page: state.page });
+  Object.assign(state, { items: data.items, total: data.total, pageSize: data.page_size });
+  $("total").textContent = `${data.total} mẫu`;
+  const pages = Math.max(1, Math.ceil(data.total / data.page_size));
+  $("page").textContent = `Trang ${state.page + 1}/${pages}`;
+  $("prev").disabled = state.page === 0;
+  $("next").disabled = state.page + 1 >= pages;
+  renderList();
+}
+function renderList() {
+  $("list").replaceChildren(...state.items.map(item => el("li", {},
+    el("button", {
+      class: state.current && state.current.id === item.id ? "active" : "",
+      onclick: () => openSample(item.id),
+    },
+      el("div", { class: "row spread small" }, el("span", { class: "muted", textContent: `#${item.id}` }), badge(item.label)),
+      el("div", { class: "clip", textContent: item.caption || "(không có caption)" })))));
+}
+
+async function openSample(id) {
+  const split = $("split").value;
+  const token = ++state.token;
+  const sample = await api("/api/sample", { split, id });
+  if (token !== state.token) return;
+  state.current = { ...sample, split };
+  $("results").replaceChildren();
+  $("summary").textContent = "";
+  renderSample();
+  renderList();
+  updateRunButton();
+}
+function renderSample() {
+  const s = state.current;
+  const image = s.has_image
+    ? el("img", { id: "sampleImage", src: `/image?${new URLSearchParams({ split: s.split, id: s.id })}`, alt: `Ảnh của mẫu ${s.id}` })
+    : el("div", { class: "placeholder", textContent: "Không tìm thấy file ảnh của mẫu này." });
+  const textBlock = (title, text) => text ? el("div", { class: "textblock small" }, el("b", { textContent: title }), text) : null;
+  $("sample").replaceChildren(
+    image,
+    el("div", { class: "row spread" }, el("span", { class: "muted", textContent: `#${s.id} · ${SPLIT_NAMES[s.split] || s.split}` }), badge(s.label)),
+    el("div", { class: "caption", textContent: s.caption || "(không có caption)" }),
+    textBlock("Chữ trong ảnh (OCR)", s.ocr),
+    textBlock("Mô tả ảnh (VLM)", s.description));
+}
+
+function renderRuns() {
+  const filter = $("runFilter").value.trim().toLowerCase();
+  const visible = state.runs.filter(r => r.id.toLowerCase().includes(filter));
+  $("runCount").textContent = `${state.selected.size} đã chọn / ${state.runs.length} model`;
+  if (!state.runs.length) {
+    $("runs").replaceChildren(el("div", { class: "placeholder", textContent: "Không tìm thấy run nào có best.pt và config.json. Kiểm tra --runs-dir." }));
+    updateRunButton();
+    return;
+  }
+  $("runs").replaceChildren(...visible.map(run => {
+    const val = run.metrics.val, test = run.metrics.test;
+    const box = el("input", { type: "checkbox", checked: state.selected.has(run.id), onchange: e => {
+      e.target.checked ? state.selected.add(run.id) : state.selected.delete(run.id);
+      saveSelection();
+      $("runCount").textContent = `${state.selected.size} đã chọn / ${state.runs.length} model`;
+      updateRunButton();
+    } });
+    const rows = Object.entries(run.params).map(([k, v]) => el("tr", {},
+      el("td", { textContent: k }), el("td", { textContent: typeof v === "object" ? JSON.stringify(v) : String(v) })));
+    if (val) for (const [k, v] of Object.entries(val.per_class_f1)) {
+      rows.push(el("tr", {}, el("td", { textContent: `val F1 ${k}` }), el("td", { textContent: score(v) })));
+    }
+    return el("div", { class: "run" },
+      el("label", {}, box, el("span", { textContent: run.id })),
+      el("details", {},
+        el("summary", { textContent: `val macro-F1 ${score(val && val.macro_f1)}` + (test ? ` · test macro-F1 ${score(test.macro_f1)}` : "") }),
+        el("table", { class: "params" }, el("tbody", {}, ...rows))));
+  }));
+  updateRunButton();
+}
+function updateRunButton() { $("run").disabled = !state.current || state.selected.size === 0; }
+
+function renderResult(card, r) {
+  card.className = `card ${r.correct === true ? "ok" : r.correct === false ? "bad" : ""}`;
+  const verdict = r.correct === null ? null
+    : el("span", { class: r.correct ? "verdict-ok" : "verdict-bad", textContent: r.correct ? "Đúng" : "Sai" });
+  const bars = Object.entries(r.probs).map(([label, p]) => el("div", {
+    class: `prob ${label === r.pred ? "pred" : ""} ${label === r.gold ? "gold" : ""}`,
+  },
+    el("span", { class: "name-l", textContent: label.replace("-sarcasm", "") + (label === r.gold ? " (nhãn)" : "") }),
+    el("div", { class: "track" }, el("div", { class: "fill", style: `width:${(p * 100).toFixed(1)}%` })),
+    el("span", { class: "val", textContent: pct(p) })));
+  const inputs = Object.entries(r.input).map(([k, v]) => el("div", { class: "textblock small" }, el("b", { textContent: k }), v));
+  const info = [`${r.seconds}s`, r.device, `${(r.model.num_params / 1e6).toFixed(1)}M tham số`,
+                `${(r.model.num_trainable / 1e6).toFixed(2)}M train được`];
+  if (r.model.best_epoch != null) info.push(`best epoch ${r.model.best_epoch + 1}`);
+  card.replaceChildren(...[
+    el("div", { class: "row spread" }, el("span", { class: "name", textContent: r.run }),
+      el("span", { class: "row" }, badge(r.pred), verdict)),
+    ...bars,
+    r.axis && el("div", { class: "small muted", textContent: `Text đứng riêng mỉa mai ${pct(r.axis.text_alone)} · Ảnh đứng riêng mỉa mai ${pct(r.axis.image_alone)}` }),
+    ...r.warnings.map(w => el("div", { class: "small warn", textContent: w })),
+    el("details", {}, el("summary", { textContent: `Đầu vào model · ${info.join(" · ")}` }), ...inputs),
+  ].filter(Boolean));
+}
+function renderSummary(results, failed) {
+  const scored = results.filter(r => r.correct !== null);
+  const preds = new Set(results.map(r => r.pred));
+  const parts = [`${results.length} model đã chạy`];
+  if (failed) parts.push(`${failed} model lỗi`);
+  if (scored.length) parts.push(`${scored.filter(r => r.correct).length}/${scored.length} đúng`);
+  if (results.length > 1) parts.push(preds.size === 1 ? "các model đồng ý" : `các model chia thành ${preds.size} nhãn`);
+  $("summary").textContent = parts.join(" · ");
+}
+
+async function runInference() {
+  const s = state.current;
+  const token = ++state.token;
+  const ids = state.runs.map(r => r.id).filter(id => state.selected.has(id));
+  const prior = $("prior").checked ? "1" : "0";
+  const cards = ids.map(id => el("div", { class: "card" },
+    el("div", { class: "name", textContent: id }), el("div", { class: "small muted", textContent: "Đang chờ…" })));
+  $("results").replaceChildren(...cards);
+  $("summary").textContent = "";
+  $("run").disabled = true;
+  const results = [];
+  let failed = 0;
+  // chạy lần lượt: server chỉ suy luận một mẫu mỗi lúc, kết quả hiện dần thay vì đợi cả danh sách
+  for (const [i, id] of ids.entries()) {
+    if (token !== state.token) return;
+    cards[i].lastChild.textContent = "Đang nạp model và suy luận…";
+    try {
+      const r = await api("/api/predict", { split: s.split, id: s.id, run: id, prior });
+      if (token !== state.token) return;
+      renderResult(cards[i], r);
+      results.push(r);
+    } catch (e) {
+      if (token !== state.token) return;
+      failed++;
+      cards[i].className = "card bad";
+      cards[i].lastChild.className = "small error";
+      cards[i].lastChild.textContent = e.message;
+    }
+    renderSummary(results, failed);
+  }
+  updateRunButton();
+}
+
+function resetList() { state.page = 0; loadList().catch(showError); }
+function showError(e) { $("status").textContent = `Lỗi: ${e.message}`; }
+let searchTimer;
+$("split").onchange = () => { $("label").value = ""; renderLabelOptions(); resetList(); };
+$("label").onchange = resetList;
+$("query").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(resetList, 250); };
+$("prev").onclick = () => { state.page--; loadList().catch(showError); };
+$("next").onclick = () => { state.page++; loadList().catch(showError); };
+$("random").onclick = async () => {
+  const data = await api("/api/samples", { split: $("split").value, label: $("label").value, q: $("query").value, random: 1 });
+  if (data.item) openSample(data.item.id).catch(showError);
+};
+$("runFilter").oninput = renderRuns;
+$("selectAll").onclick = () => {
+  const filter = $("runFilter").value.trim().toLowerCase();
+  state.runs.filter(r => r.id.toLowerCase().includes(filter)).forEach(r => state.selected.add(r.id));
+  saveSelection(); renderRuns();
+};
+$("selectNone").onclick = () => { state.selected.clear(); saveSelection(); renderRuns(); };
+$("run").onclick = () => runInference().catch(showError);
+
+(async function init() {
+  const [meta, runs] = await Promise.all([api("/api/meta"), api("/api/runs")]);
+  Object.assign(state, { labels: meta.labels, splits: meta.splits, runs: runs.runs });
+  const known = new Set(state.runs.map(r => r.id));
+  state.selected = new Set(loadSelection().filter(id => known.has(id)));
+  $("split").replaceChildren(...Object.entries(meta.splits).map(([name, info]) =>
+    el("option", { value: name, textContent: `${SPLIT_NAMES[name] || name} (${info.size})` })));
+  renderLabelOptions();
+  renderRuns();
+  $("status").textContent = [`Thiết bị suy luận: ${meta.device}`, ...meta.warnings].join(" · ");
+  await loadList();
+})().catch(showError);
+</script>
+</body>
+</html>
