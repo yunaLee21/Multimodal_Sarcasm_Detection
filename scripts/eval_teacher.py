@@ -1,4 +1,4 @@
-"""Đánh giá teacher: so nhãn teacher đoán (đa số các lần sinh) với nhãn gốc (cổng G1, docs/cot_distillation_plan.md).
+"""Đánh giá teacher: so nhãn teacher đoán (đa số các lần sinh) với nhãn gốc (cổng G1, docs/experiment_plan.md).
 
     python scripts/eval_teacher.py --raw-dir <rationales>/raw/v1 --split train --ids-file <rationales>/ids/pilot_eval.txt
     python scripts/eval_teacher.py --raw-dir <rationales>/raw/v1 --split public_test --name val_zero_shot

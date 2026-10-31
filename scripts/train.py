@@ -75,7 +75,7 @@ def main():
         log.info("trọng số feature: %s", aux_note)
     test_metrics = None
     # train.eval_test: false (các config CoT distillation): không chấm private test sau mỗi run, chỉ chấm một lần
-    # ở bước cuối bằng run_experiments.py --extra-eval test (docs/cot_distillation_plan.md giai đoạn 6)
+    # ở bước cuối bằng run_experiments.py --extra-eval test (docs/experiment_plan.md giai đoạn 6)
     if cfg.train.get("eval_test", True):
         test_metrics, _ = trainer.evaluate("test")
         log.info("test (best checkpoint)\n%s", format_metrics(test_metrics))

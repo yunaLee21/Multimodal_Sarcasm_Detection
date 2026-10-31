@@ -24,8 +24,8 @@ IE403/
 ├── PLAN.md                 # Kế hoạch 8 tuần
 ├── CODEBASE.md             # (tài liệu này)
 ├── docs/
-│   ├── cot_distillation.md       # thiết kế M1 (CoT distillation) và M2 (+ hierarchical)
-│   └── cot_distillation_plan.md  # kế hoạch chạy M1/M2 trên GPU server
+│   ├── experiment_design.md  # thiết kế thí nghiệm: CoT distillation (M1, M2, M3), baseline, kNN, pretrain, chẩn đoán
+│   └── experiment_plan.md    # kế hoạch chạy các thí nghiệm trên GPU server
 ├── pyproject.toml          # khai báo package `vimmsd` để `pip install -e .`
 ├── requirements.txt        # Thư viện đầy đủ (chạy local)
 ├── requirements-kaggle.txt # Chỉ các thư viện Kaggle/Colab chưa có sẵn
@@ -50,7 +50,7 @@ IE403/
 │   ├── fusion_cross_attn.yaml # Tuần 5
 │   ├── fusion_cross_attn_focal.yaml # Tuần 5 (+ xử lý imbalance)
 │   ├── distill_base.yaml           # backbone chung cho CoT distillation (multistream_clip đóng băng)
-│   ├── distill_flat_{a,b,c,d}.yaml # M1 (= d) và các cột ablation, xem docs/cot_distillation.md mục 6.2; *_d_nogroup3 bỏ nhóm 3
+│   ├── distill_flat_{a,b,c,d}.yaml # M1 (= d) và các cột ablation, xem docs/experiment_design.md mục 6.2; *_d_nogroup3 bỏ nhóm 3
 │   ├── distill_hier_{a,b,c,d}.yaml # M2 (= d) và các cột ablation; *_d_nogroup3 bỏ nhóm 3
 │   ├── hier_cascade.yaml           # kiểu pipeline phân cấp nối tiếp của Vu et al. (định tuyến cứng), để đối chiếu
 │   └── experiments/                # plan config × seed cho run_experiments.py (mục 7.3)
@@ -157,7 +157,7 @@ IE403/
 | `analysis/shortcut_check.py` | Tuần 6 | Swap ảnh giữa các mẫu, đo % thay đổi dự đoán |
 | `analysis/interpretability.py` | Tuần 6 | Grad-CAM trên ảnh, attention weight trên text |
 | `analysis/llm_compare.py` | Tuần 7 | Prompt Vintern/LLM đa modal, so sánh với model fine-tune |
-| `data/rationale.py`, `scripts/generate_rationales.py`, `scripts/build_rationale_dataset.py`, `scripts/embed_rationales.py` | CoT distillation | Sinh, lọc, đóng gói reasoning của teacher. Chỉ chạy trên GPU server (`docs/cot_distillation_plan.md`) |
+| `data/rationale.py`, `scripts/generate_rationales.py`, `scripts/build_rationale_dataset.py`, `scripts/embed_rationales.py` | CoT distillation | Sinh, lọc, đóng gói reasoning của teacher. Chỉ chạy trên GPU server (`docs/experiment_plan.md`) |
 | `scripts/run_experiments.py`, `scripts/summarize_results.py` | CoT distillation | Thay cho cell chạy nhiều run trong notebook 04: chạy ma trận config × seed trên N GPU và tổng hợp kết quả |
 
 ---
@@ -298,7 +298,7 @@ python scripts/train.py --config configs/fusion_cross_attn.yaml \
 
 ## 7. Chạy trên GPU server (chỉ `.py`)
 
-Dùng cho người có quyền vào GPU server riêng; hiện là task CoT distillation (`docs/cot_distillation_plan.md`). Không dùng notebook: mọi bước đều là script trong `scripts/`, chạy trong `tmux` để không mất tiến trình khi ngắt SSH. Các thành viên khác vẫn chạy Kaggle như mục 6. Hai bên dùng chung code (git) và chung cache (Kaggle dataset).
+Dùng cho người có quyền vào GPU server riêng; hiện là task CoT distillation (`docs/experiment_plan.md`). Không dùng notebook: mọi bước đều là script trong `scripts/`, chạy trong `tmux` để không mất tiến trình khi ngắt SSH. Các thành viên khác vẫn chạy Kaggle như mục 6. Hai bên dùng chung code (git) và chung cache (Kaggle dataset).
 
 ### 7.1. Cài đặt một lần
 
@@ -341,7 +341,7 @@ paths:
 ├── vimmsd_cache/
 │   ├── text_preprocessed.json
 │   ├── ocr.json, description.json, image_preprocessed.json/.csv
-│   └── rationales/              # CoT distillation (docs/cot_distillation_plan.md)
+│   └── rationales/              # CoT distillation (docs/experiment_plan.md)
 │       ├── ids/*.txt                         # danh sách id tập thử và các lô
 │       ├── raw/<prompt_version>/*.jsonl      # output teacher, chia shard
 │       ├── review/<batch>.csv                # file chấm rubric
@@ -405,7 +405,7 @@ Script chạy lại được: bước nào đã có kết quả thì bỏ qua. L
 
 ### 7.5. CoT distillation trên server
 
-Thứ tự và cổng quyết định theo `docs/cot_distillation_plan.md`; lệnh đầy đủ có trong docstring đầu mỗi script. `<R>` là `data/server/cache/rationales`.
+Thứ tự và cổng quyết định theo `docs/experiment_plan.md`; lệnh đầy đủ có trong docstring đầu mỗi script. `<R>` là `data/server/cache/rationales`.
 
 | Giai đoạn | Lệnh chính |
 |---|---|
@@ -503,4 +503,4 @@ Khung code ở mục 2 đã có đủ (trừ `PLAN.md`). Việc cần làm để
 3. Xử lý các điểm "CHÚ Ý" trong bảng tổng kết của notebook (tiền xử lý caption, cách chia val/test).
 4. Chạy `notebooks/00_template.ipynb` trên Kaggle để chắc chắn clone + import `vimmsd` + đọc dữ liệu hoạt động, rồi chạy `01_eda.ipynb` và `01b_image_text_extraction.ipynb` (tạo cache OCR + mô tả VLM, cần GPU).
 5. Sau đó các thành viên làm song song theo notebook 02–07, chỉnh hyperparameter qua config/`--override`, sửa code trong `src/` qua PR.
-6. GPU server (CoT distillation): code cho mọi giai đoạn đã có (mục 2, mục 7.5); việc còn lại là chạy theo `docs/cot_distillation_plan.md` → `build_rationale_dataset.py` → `embed_rationales.py`.
+6. GPU server (CoT distillation): code cho M1, M2 đã có (mục 2, mục 7.5), M3 và các hướng mở rộng thì chưa (`docs/experiment_plan.md`); việc còn lại là chạy theo `docs/experiment_plan.md` → `build_rationale_dataset.py` → `embed_rationales.py`.

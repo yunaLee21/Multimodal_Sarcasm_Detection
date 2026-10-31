@@ -1,4 +1,4 @@
-# Giai đoạn 0 (docs/cot_distillation_plan.md, cổng G0): cột (a)/(b), không cần teacher.
+# Giai đoạn 0 (docs/experiment_plan.md, cổng G0): cột (a)/(b), không cần teacher.
 #   python scripts/run_experiments.py --plan configs/experiments/cot_distill_stage0.yaml
 name: cot_distill_stage0
 seeds: [42, 1, 2]

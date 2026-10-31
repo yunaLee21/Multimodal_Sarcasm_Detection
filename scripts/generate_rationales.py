@@ -1,4 +1,4 @@
-"""Teacher (VLM) sinh reasoning CoT 4 bước cho từng mẫu (docs/cot_distillation.md mục 3).
+"""Teacher (VLM) sinh reasoning CoT 4 bước cho từng mẫu (docs/experiment_design.md mục 3).
 
     # thử prompt, 1 lần sinh mỗi mẫu (greedy)
     python scripts/generate_rationales.py --split train --ids-file <rationales>/ids/pilot_dev.txt --k 1 --temperature 0

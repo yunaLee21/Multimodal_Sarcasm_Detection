@@ -1,5 +1,5 @@
 # Baseline Phase 4 (như notebook 04) chạy lại trên GPU server, làm mốc cho cổng G0 của CoT distillation
-# (docs/cot_distillation_plan.md). data.split=official: val = public test, test = private test.
+# (docs/experiment_plan.md). data.split=official: val = public test, test = private test.
 #   python scripts/run_experiments.py --plan configs/experiments/phase4_baselines.yaml
 name: phase4_baselines
 seeds: [42, 1, 2]

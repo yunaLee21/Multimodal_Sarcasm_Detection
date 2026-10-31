@@ -1,4 +1,4 @@
-"""Reasoning của teacher cho CoT distillation (docs/cot_distillation.md mục 3-4).
+"""Reasoning của teacher cho CoT distillation (docs/experiment_design.md mục 3-4).
 
 Luồng dữ liệu, mỗi bước một script:
     make_id_lists.py         -> rationales/ids/*.txt
@@ -23,7 +23,7 @@ LABELS = ("not-sarcasm", "text-sarcasm", "image-sarcasm", "multi-sarcasm")
 RUBRIC = ("c1_text", "c2_image", "c3_combined", "c4_conclusion")
 PASS_REVIEWS = ("pass", "auto")  # auto = nhóm 1 không nằm trong mẫu kiểm tra ngẫu nhiên
 
-# CẦN ĐỐI CHIẾU với hướng dẫn gán nhãn của UIT DSC 2024 trước khi chạy cả tập (docs/cot_distillation_plan.md 1.1).
+# CẦN ĐỐI CHIẾU với hướng dẫn gán nhãn của UIT DSC 2024 trước khi chạy cả tập (docs/experiment_plan.md 1.1).
 LABEL_DEFINITIONS = """- not-sarcasm: bài đăng không có ý mỉa mai.
 - text-sarcasm: ý mỉa mai nằm ở caption; ảnh không góp phần tạo ra ý mỉa mai.
 - image-sarcasm: ý mỉa mai nằm ở ảnh (kể cả chữ trong ảnh); caption không góp phần tạo ra ý mỉa mai.

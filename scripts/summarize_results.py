@@ -4,7 +4,7 @@
     python scripts/summarize_results.py --plan ... --with-test   # chỉ khi đã chốt checkpoint mọi run
 
 Mặc định chỉ đọc val (best_val_metrics.json). Private test chỉ mở một lần ở bước đánh giá cuối
-(docs/cot_distillation_plan.md giai đoạn 6), nên --with-test phải bật tay.
+(docs/experiment_plan.md giai đoạn 6), nên --with-test phải bật tay.
 Ghi runs.csv (mỗi run một dòng), summary.csv và summary.md vào <output_dir>/_plans/<plan>/."""
 import argparse
 

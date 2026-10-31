@@ -1,12 +1,12 @@
-# Kế hoạch chạy CoT distillation (M1, M2)
+# Kế hoạch thí nghiệm: CoT distillation và các hướng liên quan
 
-Thiết kế phương pháp: `docs/cot_distillation.md`. Tài liệu này chỉ nói **chạy gì, theo thứ tự nào, ra file gì, khi nào dừng**.
+Thiết kế phương pháp và ý nghĩa các mã M1–M3, B1–B3, E1–E3, D1: `docs/experiment_design.md` (mục 1.1). Tài liệu này chỉ nói **chạy gì, theo thứ tự nào, ra file gì, khi nào dừng**.
 
 Nguyên tắc:
 - Mọi bước chạy trên **GPU server**, chỉ bằng script `.py` (không notebook), trong `tmux`. Cách cài đặt, bố cục dữ liệu và lệnh xem `CODEBASE.md` mục 7. Máy local chỉ dùng để viết code và chạy `pytest`.
 - Cache sinh ra (`rationale_dataset.json`...) được upload lên Kaggle dataset để các thành viên chạy Kaggle dùng chung (`CODEBASE.md` mục 7.6).
-- Mỗi giai đoạn kết thúc bằng một **cổng quyết định** (G0–G4). Không qua cổng thì không làm giai đoạn sau, mà quay lại sửa.
-- Dùng `data.split=official` xuyên suốt: train = train, val = public test, test = private test. Private test chỉ xem ở giai đoạn 6, không dùng để chọn model.
+- Mỗi giai đoạn kết thúc bằng một **cổng quyết định** (G0–G5). Không qua cổng thì không làm giai đoạn sau, mà quay lại sửa.
+- Dùng `data.split=official` xuyên suốt: train = train, val = public test, test = private test. Private test chỉ xem ở bước đánh giá cuối của giai đoạn 6, và ở giai đoạn 7 cho các nhánh tuỳ chọn, không dùng để chọn model.
 
 ---
 
@@ -14,17 +14,17 @@ Nguyên tắc:
 
 | Giai đoạn | Việc | GPU | Cần teacher | Cổng |
 |---|---|---|---|---|
-| 0 | Code head phân cấp + nhãn phụ, chạy cột (a)/(b) | có | không | G0 |
-| 1 | Thử teacher, chốt prompt | có | có | G1 |
+| 0 | Chạy cột (a)/(b), kiểm tra shortcut (D1), kNN (E1) | có | không | G0 |
+| 1 | Thử teacher, chốt prompt, thử few-shot (E2) | có | có | G1 |
 | 2 | Sinh reasoning cho tập train | nhiều | có | – |
 | 3 | Phân nhóm, rationalization, xuất file chấm | ít | có | – |
 | 4 | Người kiểm tra theo rubric | không | không | G2 |
 | 5 | Đóng gói `rationale_dataset.json` + embedding | ít | không | – |
-| 6 | Train ma trận thí nghiệm (cột c/d, M1, M2) | nhiều | không | G3 |
-| 7 | (tuỳ chọn) Nhánh reasoning làm đầu vào | có | có | – |
+| 6 | Code M3, train ma trận (cột c/d, M1, M2, M3), lặp lại D1 và E1 | nhiều | không | G3 |
+| 7 | (tuỳ chọn) B3 reasoning làm đầu vào, B2 stacking, E3 pretrain | nhiều | tuỳ nhánh | G5 (E3) |
 | 8 | Phân tích, viết báo cáo | không | không | G4 |
 
-Giai đoạn 0 và 1 **chạy song song được**: giai đoạn 0 không cần teacher, còn giai đoạn 1 không cần code student. Giai đoạn 4 (người chấm) thường là nút thắt về thời gian. Nên bắt đầu chấm ngay khi giai đoạn 3 xuất xong lô đầu (lớp hiếm trước), không đợi sinh xong cả tập.
+D1 và E1 không cần train lại, nhưng cần checkpoint của giai đoạn 0. Giai đoạn 0 và 1 **chạy song song được**: giai đoạn 0 không cần teacher, còn giai đoạn 1 không cần code student. Giai đoạn 4 (người chấm) thường là nút thắt về thời gian. Nên bắt đầu chấm ngay khi giai đoạn 3 xuất xong lô đầu (lớp hiếm trước), không đợi sinh xong cả tập.
 
 ---
 
@@ -44,11 +44,16 @@ Giai đoạn 0 và 1 **chạy song song được**: giai đoạn 0 không cần 
 
 **Trước giai đoạn 0**: chuẩn bị dữ liệu trên server (`CODEBASE.md` mục 7.4). Nên tải cache có sẵn `funalee/vimmsd-data-preprocessed` để kết quả so được với các run trên Kaggle của nhóm. Chỉ chạy lại `preprocess_text.py` / `extract_image_text.py` khi cố ý đổi cấu hình.
 
-**Đầu ra.** Bảng macro-F1, weighted-F1 và F1 từng lớp trên **val**, có và không có hiệu chỉnh prior.
+**Chẩn đoán và hậu xử lý** (sau khi có checkpoint, chỉ dùng val):
+1. **D1, `scripts/diagnose_shortcuts.py`** (cần viết, có test): text-only với đa phương thức, đổi ảnh gồm cả OCR và mô tả, xoá tín hiệu bề mặt, Integrated Gradients (`experiment_design.md` mục 6.6). Text-only lấy từ plan `phase4_baselines`. Ghi vào `outputs/diagnostics/`.
+2. **E1, `scripts/knn_eval.py`** (cần viết, có test): nạp checkpoint tốt nhất của mỗi hàng, tính `z` của train và val, dò `k` ∈ {5, 10, 20, 50}, `τ` ∈ {0,05; 0,1; 0,2}, `λ` ∈ {0,5; 0,7; 0,9; 1} theo tiêu chí chọn checkpoint (mục 5.5). Ghi vào `outputs/knn/`, kèm phân bố `sim` của láng giềng gần nhất.
+
+**Đầu ra.** Bảng macro-F1, weighted-F1 và F1 từng lớp trên **val**, có và không có hiệu chỉnh prior. Báo cáo D1. Bảng E1 so với cùng checkpoint không retrieval.
 
 **Cổng G0.**
 - Head phân cấp không kém head phẳng quá 1 điểm macro-F1 trên val. Nếu kém hơn, kiểm tra lại code trước khi đi tiếp.
-- Ghi lại số tốt nhất của cột (a)/(b). Đây là mốc mà teacher ở G1 phải vượt.
+- Ghi lại số tốt nhất của cột (a)/(b). Đây là mốc mà teacher ở G1 phải vượt. Mốc này không tính E1, vì teacher cũng không dùng retrieval.
+- D1 và E1 không chặn cổng này. Nếu đổi ảnh gần như không làm dự đoán đổi, ưu tiên xem lại fusion trước khi đầu tư nhiều vào teacher. E1 chỉ được giữ nếu chênh lệch trên val lớn hơn 1 độ lệch chuẩn giữa các seed và `λ` được chọn nhỏ hơn 1.
 
 ---
 
@@ -66,15 +71,16 @@ Giai đoạn 0 và 1 **chạy song song được**: giai đoạn 0 không cần 
 3. `scripts/make_id_lists.py`: tạo `pilot_dev.txt`, `pilot_eval.txt`, `batch{1..4}.txt` theo seed cố định, lưu ở `data/processed/rationales/ids/`.
 
 **Chạy.**
-1. Đối chiếu định nghĩa 4 nhãn với hướng dẫn gán nhãn của UIT DSC 2024, rồi viết prompt v1 theo khung 4 bước (`cot_distillation.md` mục 3.2).
+1. Đối chiếu định nghĩa 4 nhãn với hướng dẫn gán nhãn của UIT DSC 2024, rồi viết prompt v1 theo khung 4 bước (`experiment_design.md` mục 3.2).
 2. Chạy Qwen2.5-VL-7B-Instruct với k = 1 trên prompt-dev, sửa prompt 2–3 vòng.
 3. Chạy prompt đã chốt với k = 3 trên pilot-eval.
-4. Chạy zero-shot (không cho nhãn, k = 1) trên **toàn bộ val** (1 413 mẫu) để so trực tiếp với mốc G0. Ở đây chỉ đánh giá, không chọn mẫu, nên không rò rỉ.
+4. Chạy zero-shot (không cho nhãn, k = 1) trên **toàn bộ val** (1 413 mẫu) để so trực tiếp với mốc G0. Ở đây chỉ đánh giá, không chọn mẫu, nên không rò rỉ. Giữ lại T/I của lần chạy này để phân tích recall của `multi` theo trường hợp (mục 6.3 của thiết kế).
 5. Nếu Qwen 7B không qua G1: thử bản 32B (cần lượng tử hoá trên 2×T4), hoặc GPT-4o / Gemini trên đúng 280 mẫu đó, kèm ước tính chi phí cho cả tập.
+6. **E2 (few-shot, cần viết code):** sau khi prompt zero-shot ổn định, so với bản few-shot trên prompt-dev (`experiment_design.md` mục 3.4). Bản được chọn mới chạy bước 3 và 4, và ghi vào `prompt_version` (ví dụ `v1_fewshot`).
 
 **Đầu ra.** Prompt chốt (`prompt_version=v1`), tên teacher, tốc độ (mẫu/giờ trên 2×T4), tỉ lệ parse lỗi.
 
-**Cổng G1** (đánh giá trên val):
+**Cổng G1** (đánh giá trên val, cho bản prompt đã chọn):
 - F1 của teacher ở `image-sarcasm` **hoặc** `multi-sarcasm` cao hơn mốc tốt nhất của G0. Nếu teacher kém hơn baseline ở cả hai lớp này thì reasoning của nó khó thêm được thông tin. Khi đó dừng hướng distillation, chỉ báo cáo teacher như một baseline zero-shot (README mục 5.4).
 - Tỉ lệ parse lỗi dưới 5%.
 - Dùng tốc độ đo được để ước tính thời gian cho giai đoạn 2. Nếu quá lâu so với thời hạn, giảm phạm vi theo thứ tự ưu tiên ở giai đoạn 2, hoặc chuyển sang chạy teacher bằng `vllm`.
@@ -103,7 +109,7 @@ Hai lớp hiếm dùng k = 5 vì mỗi mẫu có giá trị cao, và lô 1 chỉ
 ## Giai đoạn 3: phân nhóm, rationalization, xuất file chấm
 
 **Code.** `scripts/build_rationale_dataset.py`, gồm 3 lệnh con:
-- `group`: tính `n_correct / k`, gán nhóm 1/2/3 (`cot_distillation.md` mục 4.1), chọn reasoning đại diện.
+- `group`: tính `n_correct / k`, gán nhóm 1/2/3 (`experiment_design.md` mục 4.1), chọn reasoning đại diện.
 - `rationalize`: liệt kê id nhóm 3, gọi `generate_rationales.py --with-label`.
 - `export`: xuất `review/<lô>.csv` với các cột `id`, `label`, `caption`, `ocr`, `image_path`, `rationale`, `group`, `rationalized`, và 4 cột rubric để trống.
 
@@ -132,32 +138,55 @@ Hai lớp hiếm dùng k = 5 vì mỗi mẫu có giá trị cao, và lô 1 chỉ
 
 ## Giai đoạn 5: đóng gói dữ liệu
 
-1. `build_rationale_dataset.py merge`: gộp kết quả chấm thành `rationale_dataset.json` theo định dạng ở `cot_distillation.md` mục 4.4.
+1. `build_rationale_dataset.py merge`: gộp kết quả chấm thành `rationale_dataset.json` theo định dạng ở `experiment_design.md` mục 4.4.
 2. Mã hoá reasoning bằng PhoBERT đóng băng thành `rationale_embeddings.npy` cùng danh sách id. Tính trước một lần để không phải chạy PhoBERT trên reasoning mỗi epoch.
 3. Lưu ở `data/processed/rationales/` trên server. Thêm `data.rationale.dir` / `file` vào `base.yaml`, theo cách đang làm với `image_text`. Đồng thời upload thành **Kaggle dataset** riêng, ví dụ `vimmsd-rationales`, phiên bản ứng với `prompt_version` / `rubric_version`, để nhóm dùng lại được trên Kaggle.
 4. Code: `data/dataset.py` đọc file, thêm `text_sarcastic`, `image_sarcastic`, `e_rationale` và mask "có reasoning" vào batch. Có test cho mẫu không có reasoning.
+5. Thống kê số mẫu mỗi subclass `multi_*`. Subclass dưới khoảng 30 mẫu đạt rubric thì gộp với subclass gần nhất (mục 5.4), ghi quyết định lại trước khi train M3.
 
 ---
 
 ## Giai đoạn 6: train ma trận thí nghiệm
 
-**Configs.** Gồm `distill_flat_{c,d}.yaml`, `distill_hier_{c,d}.yaml` và `distill_{flat,hier}_d_nogroup3.yaml`. Kết hợp với cột (a)/(b) và cascade ở giai đoạn 0 là đủ ma trận ở `cot_distillation.md` mục 6.2.
+**Code M3** (local, có test, làm trước khi chạy ma trận): `SubclassHead`, `λ_sub`, nhánh `subclass` của `compute_prior_shift`, config (`experiment_design.md` mục 8). Test gồm: xác suất gộp đúng bằng tổng 4 subclass và cộng lại bằng 1, mẫu `multi` thiếu nhãn teacher chỉ chịu loss mức thô, hiệu chỉnh prior giữ nguyên tỉ lệ giữa các subclass.
 
-**Chọn hyperparameter trên val.** Grid nhỏ cho `λ_axis` ∈ {0,1; 0,3; 1} và `λ_rat` ∈ {0,1; 0,3; 1}, chỉ chạy trên cột (d), 1 seed. Sau đó cố định giá trị tốt nhất cho mọi ô.
+**Configs.** Gồm `distill_flat_{c,d}.yaml`, `distill_hier_{c,d}.yaml`, `distill_sub_{c,d}.yaml` và `distill_{flat,hier,sub}_d_nogroup3.yaml`. Kết hợp với cột (a)/(b) và cascade ở giai đoạn 0 là đủ ma trận ở `experiment_design.md` mục 6.2.
+
+**Chọn hyperparameter trên val.** Grid nhỏ cho `λ_axis` ∈ {0,1; 0,3; 1} và `λ_rat` ∈ {0,1; 0,3; 1}, chỉ chạy trên cột (d), 1 seed. M3 dò riêng `λ_sub` ∈ {0,1; 0,3; 1} thay cho `λ_axis`. Sau đó cố định giá trị tốt nhất cho mọi ô.
 
 **Chạy chính thức.** Mỗi ô 3 seed, tiêu chí chọn checkpoint giống nhau cho mọi ô. Không chọn theo macro-F1 4 lớp trên val, vì `text-sarcasm` chỉ có 1 mẫu trong val. Nên dùng weighted-F1, hoặc macro-F1 trên 3 lớp còn lại. Chốt tiêu chí trước khi chạy và ghi vào `reports/results.md`.
 
-**Đánh giá cuối.** Chỉ sau khi mọi ô đã chọn xong checkpoint mới chạy `scripts/evaluate.py --split test` (private test) cho toàn bộ ma trận một lần.
+**Lặp lại trên val.** Chạy D1 cho checkpoint tốt nhất của M1, M2, M3 để so với baseline. Chạy E1 và chốt `k`, `τ`, `λ` cho từng hàng trước bước đánh giá cuối.
+
+**Đánh giá cuối.** Chỉ sau khi mọi ô đã chọn xong checkpoint mới chạy `scripts/evaluate.py --split test` (private test) cho toàn bộ ma trận một lần, kèm phiên bản có E1 với siêu tham số đã chốt.
 
 **Cổng G3.**
 - Mọi ô đã đủ 3 seed. Báo cáo trung bình ± độ lệch chuẩn.
-- M1 hoặc M2 hơn ô (b) cùng hàng **quá 1 độ lệch chuẩn** thì mới kết luận reasoning có tác dụng. Nếu không, báo cáo đó là kết quả âm tính, và vẫn giữ phân tích ở mục 6.3 của tài liệu thiết kế.
+- M1 hoặc M2 hơn ô (b) cùng hàng, hoặc M3 hơn ô (b) của hàng phẳng, **quá 1 độ lệch chuẩn** thì mới kết luận reasoning có tác dụng. Nếu không, báo cáo đó là kết quả âm tính, và vẫn giữ phân tích ở mục 6.3 của tài liệu thiết kế.
 
 ---
 
-## Giai đoạn 7 (tuỳ chọn): reasoning làm đầu vào
+## Giai đoạn 7 (tuỳ chọn): các nhánh mở rộng
 
-Chạy teacher không cho nhãn trên public và private test (khoảng 2,9k mẫu, k = 1). Đưa reasoning vào làm segment thứ 3 của PhoBERT, train trên reasoning của train (lấy reasoning đại diện của mẫu, kể cả mẫu không đạt rubric, cho giống điều kiện lúc test). So với M1/M2 để đo cái giá của việc nén reasoning vào student. Chỉ làm khi còn quota GPU sau giai đoạn 6.
+Chỉ làm khi còn thời gian và quota GPU sau giai đoạn 6, theo thứ tự B3, B2, E3. Mỗi nhánh đều dùng checkpoint và siêu tham số chọn trên val, rồi mới chấm private test một lần.
+
+### 7A. B3: reasoning làm đầu vào
+
+Chạy teacher không cho nhãn trên public và private test (khoảng 2,9k mẫu, k = 1). Đưa reasoning vào làm segment thứ 3 của PhoBERT, train trên reasoning của train (lấy reasoning đại diện của mẫu, kể cả mẫu không đạt rubric, cho giống điều kiện lúc test). So với M1/M2 để đo cái giá của việc nén reasoning vào student.
+
+### 7B. B2: 3 model riêng + stacking
+
+1. Code: chia 5 fold trên train, lưu dự đoán out-of-fold, `scripts/stack_predictions.py`, có test bảo đảm không mẫu nào được dự đoán bởi model đã học nó.
+2. Chạy model T, I, M trên 5 fold (15 run, 1 seed), rồi train lại mỗi model trên toàn bộ train.
+3. Fit classifier gộp trên dự đoán out-of-fold, chọn siêu tham số trên val, rồi so với M1, M2, M3.
+
+### 7C. E3: pretrain trên dữ liệu ngoài
+
+1. Khảo sát nguồn dữ liệu: định nghĩa nhãn, giấy phép, số mẫu, mức trùng lặp với ViMMSD. Bản đầu nên dùng MMSD2.0 cho backbone và tầng S của M2, nếu dịch máy đạt yêu cầu khi đọc thử.
+2. Code: loader cho dữ liệu ngoài, train nhị phân, nạp checkpoint trước khi fine-tune, có test.
+3. Pretrain, rồi fine-tune cùng cấu hình với ô phân cấp mềm tương ứng, 3 seed.
+
+**Cổng G5.** E3 hơn cùng cấu hình không pretrain quá 1 độ lệch chuẩn trên val thì mới đưa vào đánh giá cuối. Nếu không, báo cáo kết quả âm tính. Nếu không có nguồn dữ liệu đạt yêu cầu ở bước 1 thì dừng nhánh này và ghi lại lý do.
 
 ---
 
@@ -165,13 +194,14 @@ Chạy teacher không cho nhãn trên public và private test (khoảng 2,9k m�
 
 **Cổng G4**: báo cáo đủ các mục sau.
 1. Bảng ma trận đầy đủ trên private test (cả có và không có hiệu chỉnh prior), so với mốc 0,41 của Vu et al., ghi rõ loại F1.
-2. Trả lời từng câu hỏi ở `cot_distillation.md` mục 6.3.
+2. Trả lời từng câu hỏi ở `experiment_design.md` mục 6.3.
 3. Kết quả của teacher: zero-shot trên val, độ chính xác trên train theo lớp, phân bố 4 trường hợp của `multi`.
 4. Thống kê lọc và chấm: tỉ lệ từng nhóm, tỉ lệ đạt rubric, κ.
-5. 5–10 ví dụ định tính, gồm mẫu M2 đúng mà baseline sai và ngược lại, kèm reasoning của teacher.
-6. Hạn chế: số mẫu `text-sarcasm`, độ nhạy theo prior, chi phí.
+5. 5–10 ví dụ định tính, gồm mẫu M2 hoặc M3 đúng mà baseline sai và ngược lại, kèm reasoning của teacher.
+6. Kết quả D1 trước và sau distillation, E1 so với không retrieval, E2 so với zero-shot, và các nhánh tuỳ chọn đã chạy, kể cả nhánh dừng giữa chừng.
+7. Hạn chế: số mẫu `text-sarcasm`, độ nhạy theo prior, chi phí.
 
-Kết quả ghi vào `reports/results.md`. Bản tổng hợp riêng đặt ở `reports/cot_distillation_report.md`.
+Kết quả ghi vào `reports/results.md`. Bản tổng hợp riêng đặt ở `reports/experiment_report.md`.
 
 ---
 
@@ -184,16 +214,23 @@ Kết quả ghi vào `reports/results.md`. Bản tổng hợp riêng đặt ở 
 | 0.1 | Head phân cấp + loss + test | – | có code + test |
 | 0.2 | Nhãn phụ từ nhãn gốc + hiệu chỉnh prior | – | có code + test |
 | 0.3 | Chạy plan `phase4_baselines` (mốc), rồi (a)/(b) phẳng, phân cấp, cascade × 3 seed | S.1, S.2, 0.1, 0.2 | chưa làm |
+| 0.4 | D1: `diagnose_shortcuts.py` + test, chạy trên baseline | 0.3 | chưa có code |
+| 0.5 | E1: `knn_eval.py` + test, chạy trên baseline | 0.3 | chưa có code |
 | 1.1 | Đối chiếu định nghĩa nhãn, viết prompt v1 | – | chưa làm |
 | 1.2 | `generate_rationales.py`, `eval_teacher.py`, `make_id_lists.py` | – | có code + test |
 | 1.3 | prompt-dev, pilot-eval, zero-shot trên val → G1 | 1.1, 1.2, 0.3 | chưa làm |
+| 1.4 | E2: tuỳ chọn few-shot + test, so với zero-shot trên prompt-dev | 1.2 | chưa có code |
 | 2.1 | Sinh lô 1–3 | G1 | chưa làm |
 | 3.1 | `build_rationale_dataset.py` group/rationalize/export | 2.1 (lô 1) | có code + test |
 | 4.1 | Hiệu chỉnh rubric (50 mẫu, κ) | 3.1 | có script κ, chưa chấm |
 | 4.2 | Chấm các lô | 4.1 | chưa làm |
 | 5.1 | `rationale_dataset.json` + `embed_rationales.py` + upload Kaggle dataset | 4.2 | có script, chưa chạy |
 | 5.2 | Dataset đọc reasoning + test | – | có code + test |
-| 6.1 | Grid λ trên val | 5.1, 5.2 | chưa làm |
-| 6.2 | Ma trận đầy đủ × 3 seed, đánh giá private test → G3 | 6.1 | chưa làm |
-| 7.1 | (tuỳ chọn) reasoning làm đầu vào | 6.2 | chưa có code |
+| 5.3 | Thống kê và quyết định gộp subclass | 5.1 | chưa làm |
+| 6.0 | M3: head, loss, prior, config + test | 5.3 cho quyết định gộp | chưa có code |
+| 6.1 | Grid λ trên val | 5.1, 5.2, 6.0 | chưa làm |
+| 6.2 | Ma trận đầy đủ × 3 seed, D1 + E1 trên val, đánh giá private test → G3 | 6.1, 0.4, 0.5 | chưa làm |
+| 7.1 | (tuỳ chọn) B3: reasoning làm đầu vào | 6.2 | chưa có code |
+| 7.2 | (tuỳ chọn) B2: k-fold + stacking | 6.2 | chưa có code |
+| 7.3 | (tuỳ chọn) E3: khảo sát dữ liệu → pretrain → G5 | 6.2 | chưa có code |
 | 8.1 | Báo cáo → G4 | 6.2 | chưa làm |

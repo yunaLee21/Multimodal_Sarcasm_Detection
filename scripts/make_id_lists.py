@@ -1,4 +1,4 @@
-"""Tạo danh sách id cho tập thử teacher và các lô sinh reasoning (docs/cot_distillation_plan.md giai đoạn 1-2).
+"""Tạo danh sách id cho tập thử teacher và các lô sinh reasoning (docs/experiment_plan.md giai đoạn 1-2).
 
     python scripts/make_id_lists.py --config configs/base.yaml
 

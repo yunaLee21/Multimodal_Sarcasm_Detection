@@ -38,7 +38,7 @@ class FocalLoss(nn.Module):
 
 
 class SarcasmLoss(nn.Module):
-    """Loss train dùng đầu ra đầy đủ của SarcasmClassifier.forward_outputs (docs/cot_distillation.md mục 5).
+    """Loss train dùng đầu ra đầy đủ của SarcasmClassifier.forward_outputs (docs/experiment_design.md mục 5).
 
     flat / hierarchical: `base` (CE / focal) trên logits 4 lớp; với hierarchical logits là log xác suất nên đây
         đúng là NLL. Thêm λ_S · BCE(tầng S, nhãn != not) cho hierarchical.
