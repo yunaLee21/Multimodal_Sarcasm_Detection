@@ -1013,3 +1013,10 @@ def test_caption_filter_applies_to_every_split_and_keeps_aliases():
     assert apply_caption_filter(splits, None) is splits
     with pytest.raises(ValueError):
         apply_caption_filter(splits, "khác")
+
+
+def test_blank_caption_filter():
+    from vimmsd.data.dataset import apply_caption_filter
+
+    out = apply_caption_filter({"train": [{"id": "0", "caption": "có chữ #x"}]}, "blank")
+    assert out["train"][0]["caption"] == ""

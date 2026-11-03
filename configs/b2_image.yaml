@@ -1,0 +1,4 @@
+# B2, model I: ảnh, OCR và mô tả, không có caption. Cùng backbone multistream_clip với distill_flat_a, caption rỗng.
+inherit: distill_flat_a.yaml
+data:
+  caption_filter: blank

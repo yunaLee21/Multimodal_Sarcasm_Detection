@@ -180,7 +180,8 @@ def strip_hashtags_and_signatures(caption):
     return " ".join(HASHTAG_RE.sub(" ", SOURCE_TAG_RE.sub(" ", text)).split())
 
 
-CAPTION_FILTERS = {"source_tags": strip_source_tags, "all_tags": strip_hashtags_and_signatures}
+# blank: bỏ hẳn caption, cho model chỉ thấy ảnh, OCR và mô tả (model I của B2)
+CAPTION_FILTERS = {"source_tags": strip_source_tags, "all_tags": strip_hashtags_and_signatures, "blank": lambda _: ""}
 
 VNCORENLP_DIR = Path(os.environ.get("VNCORENLP_DIR", Path.home() / ".cache" / "vncorenlp"))
 VNCORENLP_URL = "https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/"

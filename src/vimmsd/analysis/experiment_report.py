@@ -218,6 +218,21 @@ def knn_section(output_dir):
     return render(base), render({k: v for k, v in results.items() if k not in base})
 
 
+def stacking_section(output_dir):
+    """Kết quả scripts/stack_predictions.py, nếu đã chạy."""
+    r = read_json(Path(output_dir) / "b2" / "stacking.json")
+    if not r:
+        return ""
+    rows = [[f"Model `{m}` riêng", fmt(s["oof"]["score"]), fmt(s["val"]["score"]), fmt(s["val_prior"]["score"]),
+             fmt(s["val"]["f1"]["image-sarcasm"])] for m, s in r["single"].items()]
+    rows.append(["Trung bình xác suất 3 model", "", fmt(r["average"]["val"]["score"]), fmt(r["average"]["val_prior"]["score"]),
+                 fmt(r["average"]["val"]["f1"]["image-sarcasm"])])
+    rows.append([f"Stacking, tốt nhất trên val ({', '.join(r['stacking_best']['params'])})", "", fmt(r["stacking_best"]["score"]), "",
+                 fmt(r["stacking_best"]["f1"]["image-sarcasm"])])
+    rows.append(["Stacking, kiểm định chéo trong val", "", fmt(r["stacking_cv"]["score"]), "", fmt(r["stacking_cv"]["f1"]["image-sarcasm"])])
+    return table(["Cách", "Out-of-fold trên train", "Val", "Val, hiệu chỉnh prior", "F1 `image`, val"], rows)
+
+
 def kaggle_rows(root):
     """Dòng env kaggle trong reports/results.md của nhánh này và của origin/main (nhóm chạy baseline trên Kaggle)."""
     sources = []
@@ -339,7 +354,7 @@ def build_report(output_dir, design, plan, notes=None, kaggle=(), image_meta=Non
                 section("### 11.7. E1 trên từng hàng", knn_other, note("e1_matrix")), note("stage6")),
         section("## 12. Giai đoạn 7: các nhánh tuỳ chọn",
                 section("### B3: reasoning làm đầu vào", note("b3")),
-                section("### B2: 3 model riêng + stacking", note("b2")),
+                section("### B2: 3 model riêng + stacking", stacking_section(output_dir), note("b2")),
                 section("### E3: pretrain trên dữ liệu ngoài", note("e3"))),
         section("## 13. Trả lời các câu hỏi thí nghiệm",
                 table(["So sánh", "Câu hỏi", "Kết quả"], question_rows(design, notes.get("questions") or {}))),
