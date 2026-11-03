@@ -16,6 +16,7 @@ import shutil
 import sys
 from datetime import datetime
 
+from vimmsd.analysis.experiment_report import refresh_report
 from vimmsd.utils.env import git_commit
 from vimmsd.utils.experiments import build_job, expand_runs, is_done, load_plan, plan_output_dir, run_output_dir, summarize
 from vimmsd.utils.gpu_queue import run_on_gpus
@@ -88,6 +89,7 @@ def main():
 
     out, md = summarize(plan, specs, out_dirs)
     print(f"\nTổng hợp trên val ({out}):\n{md}")
+    refresh_report()
     failed = [j for j in finished if j.error]
     if failed:
         sys.exit("run lỗi: " + ", ".join(f"{j.name} ({j.error}, log {j.log})" for j in failed))

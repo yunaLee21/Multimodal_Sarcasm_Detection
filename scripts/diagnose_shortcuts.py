@@ -17,6 +17,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
+from vimmsd.analysis.experiment_report import refresh_report
 from vimmsd.analysis.shortcut_check import (compare_predictions, derangement, integrated_gradients, rank_words,
                                             stratified_indices, swap_image_views, without_surface_signals)
 from vimmsd.data.dataset import ViMMSDCollator, build_dataloaders, build_datasets
@@ -162,6 +163,7 @@ def main():
     (root / "diagnostics" / "summary.md").write_text(table, encoding="utf-8")
     print("\n" + table)
     print(f"đã ghi vào {root / 'diagnostics'}")
+    refresh_report()
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ Mặc định chỉ đọc val (best_val_metrics.json). Private test chỉ mở 
 Ghi runs.csv (mỗi run một dòng), summary.csv và summary.md vào <output_dir>/_plans/<plan>/."""
 import argparse
 
+from vimmsd.analysis.experiment_report import refresh_report
 from vimmsd.utils.experiments import expand_runs, load_plan, run_output_dir, summarize
 
 
@@ -24,6 +25,7 @@ def main():
     out, md = summarize(plan, specs, out_dirs, with_test=args.with_test)
     print(md)
     print(f"\nđã ghi vào {out}")
+    refresh_report()
     if missing:
         print(f"chưa có kết quả ({len(missing)} run): {', '.join(missing)}")
 

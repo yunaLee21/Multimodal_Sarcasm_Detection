@@ -11,6 +11,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from vimmsd.analysis.experiment_report import refresh_report
 from vimmsd.data.rationale import load_raw, predicted_label, read_ids
 from vimmsd.training.metrics import compute_metrics, format_metrics, plot_confusion_matrix
 from vimmsd.utils.config import load_config
@@ -76,6 +77,7 @@ def main():
           f" | đồng thuận giữa các lần sinh {summary['mean_agreement'] or float('nan'):.2f}"
           f" | {summary['generations_per_hour'] or float('nan'):.0f} lần sinh/giờ (mỗi tiến trình)")
     print(f"đã ghi vào {out}")
+    refresh_report()
 
 
 if __name__ == "__main__":
