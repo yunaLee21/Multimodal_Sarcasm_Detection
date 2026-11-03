@@ -9,6 +9,7 @@ emoji                # xử lý emoji trong caption
 scikit-learn         # metrics
 pyyaml               # đọc config
 pandas
+openpyxl   # sheet viết giải thích (scripts/make_explanation_sheet.py)
 matplotlib
 pillow
 tqdm
