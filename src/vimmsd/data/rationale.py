@@ -18,7 +18,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v7"
+PROMPT_VERSION = "v8"
 LABELS = ("not-sarcasm", "text-sarcasm", "image-sarcasm", "multi-sarcasm")
 RUBRIC = ("c1_text", "c2_image", "c3_combined", "c4_conclusion")
 PASS_REVIEWS = ("pass", "auto")  # auto = nhóm 1 không nằm trong mẫu kiểm tra ngẫu nhiên
@@ -72,7 +72,7 @@ Level 4 - Where is the sarcasm? Only if Level 3 is yes:
   - both the caption and the image, or created by the interaction -> multi-sarcasm
   - image only -> image-sarcasm, but only if the caption is empty, purely factual, or shows no attitude of its own. If the caption jokes, mocks, plays along or adds an attitude to a sarcastic image, the label is multi-sarcasm.
 
-Calibration: in this dataset multi-sarcasm is far more common than image-sarcasm and text-sarcasm, which are rare. When unsure between image-sarcasm and multi-sarcasm, choose multi-sarcasm.
+Calibration: in this dataset multi-sarcasm is far more common than image-sarcasm and text-sarcasm, which are rare.
 A meme, comic or joke is not automatically sarcastic. Being funny, or reporting something bad, is not enough: there must be irony, mockery or saying the opposite of what is meant. Otherwise the label is not-sarcasm.
 
 Write every "reason" in Vietnamese. Answer with exactly ONE JSON object and nothing else, filling the fields in this order:

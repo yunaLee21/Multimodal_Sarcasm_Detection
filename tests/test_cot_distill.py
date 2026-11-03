@@ -371,3 +371,24 @@ def test_teacher_4bit_only_changes_model_kwargs(monkeypatch, load_in_4bit):
         assert quant.load_in_4bit and quant.bnb_4bit_quant_type == "nf4" and quant.bnb_4bit_use_double_quant
     else:
         assert quant is None
+
+
+def test_prompt_does_not_push_towards_one_label():
+    assert "choose multi-sarcasm" not in R.build_prompt("c")
+
+
+def test_gemini_row_matches_raw_format(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("gemini_runner", "scripts/generate_rationales_gemini.py")
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    output = '{"text_alone": {"sarcastic": false, "reason": "a"}, "image_alone": {"sarcastic": true, "reason": "b"}, ' \
+             '"combined": {"sarcastic": false, "reason": "c"}, "is_sarcastic": true, "label": "image-sarcasm"}'
+    response = {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"thought": True, "text": "x"}, {"text": output}]}}],
+                "usageMetadata": {"promptTokenCount": 5}}
+    row = runner.to_row("1", "train", {"label_name": "multi-sarcasm"}, response, "m", 0.0, 1.234)
+    assert row["parsed"]["label"] == "image-sarcasm" and row["output"] == output and row["seconds"] == 1.23
+    assert row["label"] == "multi-sarcasm" and row["usage"] == {"promptTokenCount": 5}
+    env = tmp_path / ".env"
+    env.write_text("export GEMINI_API_KEY='abc'\n")
+    assert runner.load_api_key(env) in ("abc", __import__("os").environ.get("GEMINI_API_KEY"))
