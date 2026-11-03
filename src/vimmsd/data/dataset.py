@@ -14,7 +14,7 @@ from torchvision import transforms
 from vimmsd.data.augmentation import build_image_augment
 from vimmsd.data.image_io import PadToSquare, encoder_mean_color, open_image_rgb
 from vimmsd.data.image_text import compose_image_text, image_key
-from vimmsd.data.preprocessing import TextPreprocessor, clean_ocr
+from vimmsd.data.preprocessing import CAPTION_FILTERS, TextPreprocessor, clean_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -428,7 +428,18 @@ def load_all_records(cfg):
         splits["public_test"] = public
     if private is not None:
         splits["private_test"] = private
-    return splits
+    return apply_caption_filter(splits, cfg.data.get("caption_filter"))
+
+
+def apply_caption_filter(splits, name):
+    """data.caption_filter: xoá thẻ nguồn khỏi caption ở mọi split (preprocessing.CAPTION_FILTERS). null = giữ nguyên."""
+    if not name:
+        return splits
+    if name not in CAPTION_FILTERS:
+        raise ValueError(f"data.caption_filter không hợp lệ: {name!r}, chọn một trong {sorted(CAPTION_FILTERS)}")
+    edit = CAPTION_FILTERS[name]
+    seen = {}  # val = public_test cùng một list: giữ nguyên quan hệ này
+    return {key: seen.setdefault(id(recs), [{**r, "caption": edit(r["caption"])} for r in recs]) for key, recs in splits.items()}
 
 
 def build_image_transform(cfg, train, fill):

@@ -1000,3 +1000,16 @@ def test_official_split_uses_labeled_public_and_private_test(fake_data):
     with pytest.raises(ValueError, match="không có nhãn"):
         load("data.private_test_labels=missing-ref.json")
     assert len(load("data.split=random")["train"]) == 32
+
+
+def test_caption_filter_applies_to_every_split_and_keeps_aliases():
+    from vimmsd.data.dataset import apply_caption_filter
+
+    val = [{"id": "1", "caption": "vui #interpool"}]
+    splits = {"train": [{"id": "0", "caption": "a\n- Elsa\n#x"}], "val": val, "public_test": val}
+    out = apply_caption_filter(splits, "all_tags")
+    assert out["train"][0]["caption"] == "a" and out["val"][0]["caption"] == "vui"
+    assert out["val"] is out["public_test"] and val[0]["caption"] == "vui #interpool"
+    assert apply_caption_filter(splits, None) is splits
+    with pytest.raises(ValueError):
+        apply_caption_filter(splits, "khác")

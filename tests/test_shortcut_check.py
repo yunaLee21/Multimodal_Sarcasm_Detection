@@ -6,7 +6,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from vimmsd.analysis.shortcut_check import (compare_predictions, integrated_gradients, rank_words, strip_surface_signals,
+from vimmsd.analysis.shortcut_check import (compare_predictions, edit_captions, integrated_gradients, rank_words,
+                                            strip_hashtags_and_signatures, strip_source_tags, strip_surface_signals,
                                             stratified_indices, swap_image_views, without_surface_signals)
 
 LABELS = ["not-sarcasm", "text-sarcasm", "image-sarcasm", "multi-sarcasm"]
@@ -123,3 +124,27 @@ def test_rank_words_merges_subwords_and_reports_punctuation():
     out = rank_words(tokenizer, rows, LABELS, min_count=2)["multi-sarcasm"]
     assert out["top_words"][0] == {"word": "cười", "mean_attribution": 3.0, "count": 2}
     assert out["punct_share"] == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Huyền thoại 😎\n#interpool", "Huyền thoại 😎"),
+    ("Đùa thôi\n- Elsa\n#interpool #WMO #WorldMemeOrganization", "Đùa thôi - Elsa"),
+    ("Bài này #voz_f33", "Bài này"),
+    ("Tham khảo: Vozer Share Nhạc", "Tham khảo: Share Nhạc"),
+    ("xem https://voz.vn/abc nhé", "xem https://voz.vn/abc nhé"),
+    ("cả nhà #vui", "cả nhà #vui"),
+    ("bạn wmo", "bạn"),
+])
+def test_strip_source_tags(raw, expected):
+    assert strip_source_tags(raw) == expected
+
+
+def test_strip_hashtags_and_signatures():
+    assert strip_hashtags_and_signatures("Đùa thôi\n- Elsa\n#vui #interpool") == "Đùa thôi"
+    assert strip_hashtags_and_signatures("Câu - giữa dòng") == "Câu - giữa dòng"
+
+
+def test_edit_captions_only_preprocesses_changed():
+    ds = SimpleNamespace(records=[{"caption": "a"}, {"caption": "b #interpool"}], texts=["giữ", "x"])
+    out, changed = edit_captions(ds, strip_source_tags, lambda t: f"p:{t}")
+    assert out.texts == ["giữ", "p:b"] and changed.tolist() == [False, True]

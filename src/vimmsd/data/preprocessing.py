@@ -73,6 +73,12 @@ SPACE_RE = re.compile(r"\s+")
 INVISIBLE_CHARS_RE = re.compile(r"[​‌‍‎‏﻿‪-‮]")
 EMOJI_MODIFIERS_RE = re.compile("[️\U0001F3FB-\U0001F3FF]")  # variation selector, màu da
 
+# thẻ của trang nguồn: #interpool, #WMO, #voz_f33, "vozer"; không bắt "voz.vn" vì URL đã bị xoá ở bước tiền xử lý
+SOURCE_TAG_RE = re.compile(r"(?<![\w.])[#@-]?(?:interpool\w*|voz(?:er)?(?:_f\d+)?|wmo|worldmemeorganization)(?![\w.])[:.,]*",
+                           re.IGNORECASE)
+HASHTAG_RE = re.compile(r"#\w+")
+SIGNATURE_RE = re.compile(r"^\s*-\s*\w+\s*$", re.MULTILINE)  # chữ ký admin một dòng: "- Elsa"
+
 SEGMENTERS = ("vncorenlp", "underthesea", "none")
 
 
@@ -163,6 +169,18 @@ def clean_ocr(ocr: str, caption: str = "", min_chars=3, max_similarity=0.9) -> s
         return ""
     return text
 
+
+def strip_source_tags(caption):
+    return " ".join(SOURCE_TAG_RE.sub(" ", caption or "").split())
+
+
+def strip_hashtags_and_signatures(caption):
+    """Xoá thẻ nguồn, mọi hashtag và dòng chữ ký."""
+    text = SIGNATURE_RE.sub(" ", caption or "")
+    return " ".join(HASHTAG_RE.sub(" ", SOURCE_TAG_RE.sub(" ", text)).split())
+
+
+CAPTION_FILTERS = {"source_tags": strip_source_tags, "all_tags": strip_hashtags_and_signatures}
 
 VNCORENLP_DIR = Path(os.environ.get("VNCORENLP_DIR", Path.home() / ".cache" / "vncorenlp"))
 VNCORENLP_URL = "https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/"

@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from vimmsd.analysis.interpretability import merge_subwords
 from vimmsd.data.dataset import ViMMSDDataset
+from vimmsd.data.preprocessing import HASHTAG_RE, strip_hashtags_and_signatures, strip_source_tags  # noqa: F401
 from vimmsd.training.metrics import compute_metrics
 from vimmsd.training.trainer import predict
 
@@ -105,12 +106,16 @@ def strip_surface_signals(caption):
 
 
 def without_surface_signals(dataset, preprocess):
-    """Bản sao dataset đã xoá tín hiệu bề mặt khỏi caption, kèm mask các mẫu bị đổi. Mẫu không đổi giữ text đã xử lý;
-    `preprocess` chỉ gọi cho mẫu bị đổi, và không ghi vào file cache caption dùng chung."""
+    return edit_captions(dataset, strip_surface_signals, preprocess)
+
+
+def edit_captions(dataset, edit, preprocess):
+    """Bản sao dataset đã sửa caption thô bằng `edit` (trả về text đã gộp khoảng trắng), kèm mask các mẫu bị đổi. Mẫu
+    không đổi giữ text đã xử lý; `preprocess` chỉ gọi cho mẫu bị đổi, và không ghi vào file cache caption dùng chung."""
     stripped = copy.copy(dataset)
     texts, changed, memo = [], [], {}
     for rec, text in zip(dataset.records, dataset.texts):
-        clean = strip_surface_signals(rec["caption"])
+        clean = edit(rec["caption"])
         is_changed = clean != " ".join((rec["caption"] or "").split())
         if is_changed and clean not in memo:
             memo[clean] = preprocess(clean)
@@ -203,3 +208,25 @@ def rank_words(tokenizer, attributions, labels, min_count=5, top_k=20):
         out[name] = {"punct_share": punct[name] / magnitude[name] if magnitude[name] else 0.0,
                      "top_words": [{"word": w, "mean_attribution": a, "count": n} for w, a, n in ranked[:top_k]]}
     return out
+
+
+def load_trained_run(run_dir):
+    """Dựng lại model và collator của một run từ config.json và best.pt. Trả về (cfg, model, collator, device, use_amp)."""
+    import json
+    from pathlib import Path
+
+    from vimmsd.data.dataset import ViMMSDCollator
+    from vimmsd.models.classifier import build_model
+    from vimmsd.utils.checkpoint import load_checkpoint
+    from vimmsd.utils.config import _to_config
+
+    run_dir = Path(run_dir)
+    cfg = _to_config(json.loads((run_dir / "config.json").read_text(encoding="utf-8")))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = build_model(cfg)
+    load_checkpoint(run_dir / "best.pt", model, map_location=device)
+    model.to(device).eval()
+    aux_max_length = (cfg.data.get("image_text") or {}).get("aux_max_length") or 96
+    collator = ViMMSDCollator(model.tokenizer, model.image_processor, cfg.data.max_length,
+                              cfg.data.get("max_caption_length"), aux_max_length)
+    return cfg, model, collator, device, bool(cfg.train.amp and device.type == "cuda")
