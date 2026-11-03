@@ -1,0 +1,48 @@
+# Nhận xét và quyết định cho reports/experiment_report.md. Khoá nào để trống thì mục đó trống trong báo cáo.
+# Sửa file này rồi chạy: python scripts/build_experiment_report.py
+gate_G0: >-
+  Đi tiếp. Cột (a) kém 1,2 điểm, vượt ngưỡng 1 điểm, nên đã kiểm tra lại head phân cấp và loss: không thấy lỗi, test đều đạt. Theo seed, phân cấp hơn 0,2 điểm ở seed 42 và kém 2,7 và 1,0 điểm ở seed 1 và 2; độ lệch chuẩn giữa các seed của cột phẳng là 1,1 điểm, nên chênh lệch nằm trong mức nhiễu.
+gate_G1: >-
+  Đạt về mặt hình thức với v8 nhưng sát ngưỡng, đi tiếp bằng thử distillation nhỏ thay vì sinh cả tập. `image-sarcasm` 0,097 so với mốc 0,077 (14/28 đúng, độ chính xác 5,3%); chỉ cần ít hơn 3 mẫu đúng là không đạt, và mốc này là trung bình của các seed (seed tốt nhất 0,130). `multi-sarcasm` 0,699, dưới mốc 0,853 (`distill_flat_b` có hiệu chỉnh prior; chưa hiệu chỉnh 0,836). Bước pilot-eval của kế hoạch chưa chạy.
+d1: |
+  Kiểm tra trên 3 seed của `distill_flat_a`, mỗi seed 3 cách ghép ngẫu nhiên, đổi cùng lúc ảnh, OCR và mô tả. So sánh text-only chưa có vì đang chờ kết quả Kaggle; attention map chỉ có với `cross_attn`.
+
+  - Model có dùng ảnh: trung bình 18,9% dự đoán đổi khi đổi ảnh, nên điều kiện "xem lại fusion" của kế hoạch không bị kích hoạt. Đổi nhãn không chứng minh model học được sự lệch nghĩa giữa ảnh và text.
+  - Caption gánh phần lớn: macro-F1 bỏ `text-sarcasm` chỉ giảm từ 0,521 xuống 0,476 khi ảnh sai. `multi-sarcasm` giảm 0,016–0,028, trong khi luôn đoán `multi-sarcasm` trên val đã đạt F1 khoảng 0,80.
+  - `image-sarcasm` phụ thuộc ảnh: seed 1 giảm từ 0,102 xuống khoảng 0,055, seed 2 từ 0,130 xuống khoảng 0,027; seed 42 không dự đoán lớp này. Val chỉ có 28 mẫu lớp này.
+  - Emoji và dấu câu lặp ảnh hưởng ít: giảm khoảng 2,2 điểm.
+  - Điểm IG ở mức định tính: sai số completeness với 300 bước là 0,025 ở seed 42 và khoảng 0,2 ở hai seed còn lại.
+  - Nghi vấn shortcut theo nguồn (chưa kết luận): `interpool` và `voz` đứng đầu ở cả 3 seed. Caption chứa `interpool`: train 468 bài, 59% `multi-sarcasm` (toàn tập 39%); val 90 bài, 80% (toàn tập 67%). Caption chứa `voz`: train 222 bài, 12% `image-sarcasm` (toàn tập 4%); val 105 bài, 60% `not-sarcasm` (toàn tập 31%).
+source_tags: |
+  `interpool`, `voz` là thẻ của trang nguồn (`#interpool`, `#WMO`, `#voz_f33`). Model vẫn đã học với thẻ, nên đây chỉ đo mức phụ thuộc lúc suy luận; muốn biết model học được gì khi không có thẻ thì phải train lại.
+
+  - 193/1 413 caption val có thẻ. Xoá thẻ làm 26% dự đoán trên các caption này đổi nhãn (trung bình 3 seed), macro-F1 bỏ `text-sarcasm` giảm từ 0,521 xuống 0,511, accuracy từ 0,758 xuống 0,745.
+  - Xoá thêm mọi hashtag và chữ ký không làm giảm thêm đáng kể.
+  - Trên 90 bài `interpool`, accuracy giảm từ khoảng 0,69 xuống 0,56: model dựa vào thẻ này, và ở val điều đó có lợi vì 80% các bài này là `multi-sarcasm`.
+  - Hashtag trong train gắn chặt với nhãn: `#wmo`, `#worldmemeorganization` khoảng 65% `image-sarcasm` (toàn tập 4%), `#quytacungxutx` 100% `multi-sarcasm` (55 bài), `#redbull`, `#vtv`, `#70namdienbienphu` 100% `not-sarcasm` (30 bài mỗi thẻ). Nhiều thẻ trong số này không xuất hiện ở val, chi tiết ở `outputs/diagnostics/source_tags_train.csv`.
+e1: |
+  Trên val, theo tiêu chí macro-F1 bỏ `text-sarcasm`. "Kiểm định chéo" chọn tham số trên phần còn lại của val, nên công bằng hơn "kNN tốt nhất". Mốc λ = 1 có hiệu chỉnh prior như thiết kế.
+
+  **Không giữ E1.** So với λ = 1, kiểm định chéo: `distill_flat_a` -0,6 điểm, `distill_hier_b` +1,7, `hier_cascade` +0,6. Hai hàng sau vượt mức lệch giữa các seed, nhưng cả ba hàng vẫn thấp hơn cùng model chưa hiệu chỉnh prior khoảng 2,3–3,0 điểm (0,491/0,488/0,484 so với 0,521/0,512/0,507), và phần tăng chủ yếu bù lại mức giảm do hiệu chỉnh prior. F1 `image-sarcasm` không cải thiện.
+
+  Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5% mẫu val có láng giềng gần nhất với sim ≥ 0,9, và nhãn láng giềng gần nhất chỉ đúng 60–64%, thấp hơn luôn đoán `multi-sarcasm` (66,7%).
+source_tags_retrain: |
+  Train lại và đánh giá khi caption không có thẻ nguồn, hashtag và chữ ký (`distill_flat_a_notags`, 3 seed): macro-F1 bỏ `text-sarcasm` giảm từ 0,521 xuống 0,501 (cả 3 seed đều giảm, 1,4–3,4 điểm), accuracy không đổi (0,758 và 0,759). F1 `multi-sarcasm` gần như giữ nguyên; `not-sarcasm` giảm từ 0,657 xuống 0,635; `image-sarcasm` từ 0,077 xuống 0,036, chỉ có 28 mẫu val nên rất nhiễu. Chênh lệch khoảng bằng 1 độ lệch chuẩn giữa các seed. Thẻ có đóng góp nhưng không phải nguồn tín hiệu chính. Logo và chữ trong ảnh vẫn còn trong OCR nên nguồn chưa bị loại bỏ hoàn toàn.
+stage1: |
+  **Mức độ tin cậy của các lần chạy.** Prompt v1–v5 chạy Qwen2.5-VL-7B lượng tử 4-bit do GPU 12 GB không chứa được bản bf16. `pilot_eval` chưa dùng. Val đã dùng hai lần: v6, rồi v8. v7 được viết sau khi xem kết quả v6 trên val, nên kết quả v8 trên val có thể hơi lạc quan. `natural_dev` được thêm vì `pilot_dev` cân bằng lớp không phản ánh phân bố thật. Từ v5 prompt có 4 ví dụ cố định lấy từ train, nên các lần chạy này không còn là zero-shot hoàn toàn dù tên thư mục có `zero_shot`.
+
+  **Đổi model.** `gemini-2.5-flash-lite` trả về 404 (đóng với người dùng mới) nên dùng `gemini-3.5-flash-lite`. `gemini-pro-latest` khi chạy trỏ tới `gemini-3.1-pro-preview`.
+
+  **Bỏ mô tả VLM.** So cặp với v6 không thấy khác biệt đo được: trên `natural_dev` macro-F1 0,317 so với 0,318 (khoảng tin cậy 95% của chênh lệch, tính khi coi mẫu không đọc được là một nhóm riêng, từ -0,025 đến 0,019), ít hơn 14% token đầu vào. v7 không gửi mô tả ảnh.
+
+  **Qwen3-VL-8B 4-bit, v7.** Dự đoán `multi-sarcasm` cho 458/491 mẫu đọc được, thấp hơn việc luôn đoán `not-sarcasm` (56%). So với Flash Lite, khoảng tin cậy 95% của chênh lệch macro-F1 là -0,178 đến -0,109. Luật "khi phân vân thì chọn multi" của v7 có thể góp phần vào kết quả này. Chạy ở batch 1 vì batch 2 hết bộ nhớ khi có 4,2 GB đang bị chiếm trên GPU.
+
+  **Bỏ luật "khi phân vân thì chọn multi" (v8).** Trên `natural_dev`, phân bố dự đoán gần như không đổi so với v7: accuracy 56,8% so với 58,8%, macro-F1 0,326 so với 0,346. Câu nói `multi-sarcasm` phổ biến hơn vẫn được giữ. Trên val, 196/942 mẫu `multi-sarcasm` bị đoán thành `image-sarcasm`; accuracy 58,9%, thấp hơn luôn đoán `multi-sarcasm` (66,7%).
+
+  **Chi phí (ước tính, giá lấy từ nguồn tổng hợp, chưa đối chiếu giá chính thức).** Flash Lite khoảng 0,0014 USD mỗi lần sinh: khoảng 10 USD cho lô 1–3 với k = 1, khoảng 30 USD với k theo kế hoạch. Gemini Pro khoảng 35 USD cho val và khoảng 500 USD cho các lô.
+limitations: |
+  - Val chỉ có 1 mẫu `text-sarcasm` và 28 mẫu `image-sarcasm`, nên F1 các lớp này rất nhạy với vài mẫu.
+stage2: |
+  **Thử giải thích khi đã cho nhãn đúng (Qwen3-VL-8B 4-bit, v8, 100 mẫu train, ngoài `pilot_eval`), 8 giây/mẫu, chưa sinh cả tập.** 98/100 đọc được; 92/100 kết luận đúng nhãn đã cho, riêng `text-sarcasm` 16/20. Cờ text/ảnh khớp nhãn ở 95/100 mẫu, tức gần như chép lại nhãn gốc, nên cột (c) sẽ gần trùng cột (b).
+
+  Đọc thử 13 mẫu, đối chiếu ảnh ở 4 mẫu (chưa phải chấm rubric): mô tả bề mặt và lý do cho mẫu `not-sarcasm` thường đọc được; phần giải thích ý mỉa mai yếu. Lỗi gặp: nhận nhầm ảnh miệng rùa biển thành cá mập (1244); bịa nghĩa "số 13 xui xẻo" trong khi câu đùa là chồng được nhận lại máy cũ của vợ (4032); bỏ sót chơi chữ Nissan/Mitsubishi trong meme (2559); lý do mâu thuẫn với nhãn được giao (2259, 3832). File chấm: `outputs/cot_distill/label_given_review.csv`.

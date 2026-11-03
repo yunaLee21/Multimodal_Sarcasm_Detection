@@ -19,3 +19,6 @@ Mỗi lần train xong, `scripts/train.py` in ra 1 dòng kết quả (và ghi v�
 | 2026-10-30 | `distill_hier_a_s2` | `e082390` | server | 0.3804 | nan | 10.7 | plan cot_distill_stage0 | peak VRAM 1.25 GB |
 | 2026-10-30 | `distill_hier_b_s2` | `e082390` | server | 0.3896 | nan | 10.8 | plan cot_distill_stage0 | peak VRAM 1.27 GB |
 | 2026-10-30 | `hier_cascade_s2` | `e082390` | server | 0.3857 | nan | 8.0 | plan cot_distill_stage0 | peak VRAM 1.25 GB |
+| 2026-11-02 | `distill_flat_a_notags_s42` | `423c79f` | server | 0.3700 | nan | 5.4 | plan no_source_tags | peak VRAM 1.24 GB |
+| 2026-11-02 | `distill_flat_a_notags_s1` | `423c79f` | server | 0.3919 | nan | 7.9 | plan no_source_tags | peak VRAM 1.24 GB |
+| 2026-11-02 | `distill_flat_a_notags_s2` | `423c79f` | server | 0.3649 | nan | 5.4 | plan no_source_tags | peak VRAM 1.24 GB |
