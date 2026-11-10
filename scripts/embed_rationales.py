@@ -1,4 +1,4 @@
-"""Mã hoá reasoning đạt rubric bằng PhoBERT đóng băng (docs/cot_distillation_plan.md giai đoạn 5).
+"""Mã hoá reasoning đạt rubric bằng PhoBERT đóng băng (docs/experiment_plan.md giai đoạn 5).
 
     python scripts/embed_rationales.py --config configs/distill_flat_d.yaml
 

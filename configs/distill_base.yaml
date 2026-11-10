@@ -1,4 +1,4 @@
-# Backbone chung cho CoT distillation (docs/cot_distillation.md mục 5-6): mọi ô của ma trận thí nghiệm chỉ khác nhau
+# Backbone chung cho CoT distillation (docs/experiment_design.md mục 5-6): mọi ô của ma trận thí nghiệm chỉ khác nhau
 # ở head và loss. Mặc định multistream_clip đóng băng (caption, OCR, mô tả VLM, CLIP); đổi ở đây nếu plan
 # phase4_baselines cho thấy backbone khác tốt hơn trên val.
 inherit: fusion_multistream_clip_frozen.yaml

@@ -1,4 +1,4 @@
-# Giai đoạn 6: ma trận đầy đủ (docs/cot_distillation.md mục 6.2), 3 seed. Sửa loss.lambda_axis / lambda_rat
+# Giai đoạn 6: ma trận đầy đủ (docs/experiment_design.md mục 6.2), 3 seed. Sửa loss.lambda_axis / lambda_rat
 # trong distill_flat_d.yaml, distill_hier_d.yaml theo kết quả cot_distill_grid trước khi chạy.
 #   python scripts/run_experiments.py --plan configs/experiments/cot_distill.yaml
 #   python scripts/summarize_results.py --plan configs/experiments/cot_distill.yaml

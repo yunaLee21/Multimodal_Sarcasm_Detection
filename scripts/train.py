@@ -14,6 +14,7 @@ from vimmsd.training.trainer import Trainer
 from vimmsd.utils.config import find_project_root, load_config
 from vimmsd.utils.env import git_commit
 from vimmsd.utils.seed import set_seed
+from vimmsd.utils.tracking import metric_scalars, start_tracking
 
 RESULTS_HEADER = (
     "| Ngày | Config | Commit | Môi trường | Val macro-F1 | Test macro-F1 | Thời gian train (phút) | Ghi chú |\n"
@@ -62,7 +63,8 @@ def main():
              len(datasets["train"]), len(datasets["val"]), len(datasets["test"]),
              dict(zip(cfg.data.labels, counts)))
 
-    trainer = Trainer(model, build_training_loss(cfg, counts), loaders, cfg, output_dir)
+    tracker = start_tracking(cfg, commit, output_dir)
+    trainer = Trainer(model, build_training_loss(cfg, counts), loaders, cfg, output_dir, tracker=tracker)
     summary = trainer.fit()
 
     trainer.load_best()
@@ -75,13 +77,18 @@ def main():
         log.info("trọng số feature: %s", aux_note)
     test_metrics = None
     # train.eval_test: false (các config CoT distillation): không chấm private test sau mỗi run, chỉ chấm một lần
-    # ở bước cuối bằng run_experiments.py --extra-eval test (docs/cot_distillation_plan.md giai đoạn 6)
+    # ở bước cuối bằng run_experiments.py --extra-eval test (docs/experiment_plan.md giai đoạn 6)
     if cfg.train.get("eval_test", True):
         test_metrics, _ = trainer.evaluate("test")
         log.info("test (best checkpoint)\n%s", format_metrics(test_metrics))
         (output_dir / "test_metrics.json").write_text(json.dumps(test_metrics, indent=2))
         plot_confusion_matrix(test_metrics["confusion_matrix"], cfg.data.labels,
                               output_dir / "confusion_matrix_test.png", title=cfg.name)
+
+    tracker.summary({key: summary[key] for key in ("best_val_macro_f1", "best_val_select", "train_minutes", "peak_vram_gb")})
+    if test_metrics:  # chỉ ghi vào summary, không dùng để chọn model
+        tracker.summary(metric_scalars(test_metrics, "test"))
+    tracker.finish()
 
     note = args.note
     if aux_note:

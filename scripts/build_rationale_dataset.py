@@ -1,5 +1,5 @@
 """Phân nhóm, rationalization, xuất file chấm, đo κ và gộp thành rationale_dataset.json
-(docs/cot_distillation.md mục 4, docs/cot_distillation_plan.md giai đoạn 3-5).
+(docs/experiment_design.md mục 4, docs/experiment_plan.md giai đoạn 3-5).
 
     # 1. phân nhóm theo số lần teacher đoán đúng (chỉ train)
     python scripts/build_rationale_dataset.py group

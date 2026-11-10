@@ -1,0 +1,8 @@
+# Train lại cột (a) không có thẻ nguồn trong caption, 3 seed như cot_distill_stage0. Không cần teacher.
+#   python scripts/run_experiments.py --plan configs/experiments/no_source_tags.yaml
+name: no_source_tags
+seeds: [42, 1, 2]
+evaluate: [val]
+overrides: [train.num_workers=0]   # máy này: /dev/shm chỉ 64 MB, DataLoader nhiều worker bị treo
+runs:
+  - configs/distill_flat_a_notags.yaml

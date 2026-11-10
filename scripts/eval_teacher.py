@@ -1,4 +1,4 @@
-"""Đánh giá teacher: so nhãn teacher đoán (đa số các lần sinh) với nhãn gốc (cổng G1, docs/cot_distillation_plan.md).
+"""Đánh giá teacher: so nhãn teacher đoán (đa số các lần sinh) với nhãn gốc (cổng G1, docs/experiment_plan.md).
 
     python scripts/eval_teacher.py --raw-dir <rationales>/raw/v1 --split train --ids-file <rationales>/ids/pilot_eval.txt
     python scripts/eval_teacher.py --raw-dir <rationales>/raw/v1 --split public_test --name val_zero_shot
@@ -11,6 +11,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from vimmsd.analysis.experiment_report import refresh_report
 from vimmsd.data.rationale import load_raw, predicted_label, read_ids
 from vimmsd.training.metrics import compute_metrics, format_metrics, plot_confusion_matrix
 from vimmsd.utils.config import load_config
@@ -76,6 +77,7 @@ def main():
           f" | đồng thuận giữa các lần sinh {summary['mean_agreement'] or float('nan'):.2f}"
           f" | {summary['generations_per_hour'] or float('nan'):.0f} lần sinh/giờ (mỗi tiến trình)")
     print(f"đã ghi vào {out}")
+    refresh_report()
 
 
 if __name__ == "__main__":

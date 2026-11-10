@@ -1,0 +1,8 @@
+# Cột (a), train và đánh giá không có hashtag và chữ ký trong caption: đo phần phụ thuộc vào thẻ của trang nguồn
+# (scripts/check_source_tags.py). Cache riêng vì caption đã đổi: tạo bằng cách copy text_preprocessed.json, chỉ các
+# caption bị sửa mới phải tiền xử lý lại.
+inherit: distill_flat_a.yaml
+data:
+  caption_filter: all_tags
+  text:
+    cache_file: text_preprocessed_notags.json

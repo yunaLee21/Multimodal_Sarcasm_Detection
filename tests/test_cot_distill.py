@@ -1,4 +1,4 @@
-"""Test CoT distillation + head phân cấp (docs/cot_distillation.md). Không cần GPU, mạng, model thật."""
+"""Test CoT distillation + head phân cấp (docs/experiment_design.md). Không cần GPU, mạng, model thật."""
 import json
 import math
 
@@ -179,8 +179,9 @@ def test_parse_teacher_output_variants():
 
 def test_build_prompt_label_hint_and_truncation():
     p = R.build_prompt("cap " * 1000, "")
-    assert "(không có)" in p and "Nhãn đúng" not in p and len(p) < 4000
-    assert "Nhãn đúng của bài đăng này là: image-sarcasm" in R.build_prompt("cap", "chữ", label="image-sarcasm")
+    assert "(none)" in p and "The correct label" not in p and len(p) < 11000
+    assert all(l in R.DATASET_EXAMPLES for l in R.LABELS)
+    assert "The correct label of this post is: image-sarcasm" in R.build_prompt("cap", "chữ", label="image-sarcasm")
 
 
 def _row(sid, label, k_label, idx=0):
@@ -344,3 +345,51 @@ def test_trainer_runs_with_new_heads(monkeypatch, tmp_path, head_type):
     assert model.prior_shift is None and set(metrics) >= {"macro_f1", "per_class"}
     fresh = _tiny_classifier(monkeypatch, dict(cfg.model.head))
     load_checkpoint(tmp_path / "best.pt", fresh)
+
+
+@pytest.mark.parametrize("load_in_4bit", [False, True])
+def test_teacher_4bit_only_changes_model_kwargs(monkeypatch, load_in_4bit):
+    import transformers
+
+    seen = {}
+
+    class FakeModel:
+        def eval(self):
+            return self
+
+    def fake_model(name, **kwargs):
+        seen.update(kwargs)
+        return FakeModel()
+
+    processor = type("P", (), {"tokenizer": type("T", (), {})()})()
+    monkeypatch.setattr(transformers.AutoModelForImageTextToText, "from_pretrained", fake_model)
+    monkeypatch.setattr(transformers.AutoProcessor, "from_pretrained", lambda name, **kw: processor)
+    R.TeacherVLM("fake", load_in_4bit=load_in_4bit)
+    assert seen["device_map"] == "cuda"
+    quant = seen.get("quantization_config")
+    if load_in_4bit:
+        assert quant.load_in_4bit and quant.bnb_4bit_quant_type == "nf4" and quant.bnb_4bit_use_double_quant
+    else:
+        assert quant is None
+
+
+def test_prompt_does_not_push_towards_one_label():
+    p = R.build_prompt("c")
+    assert "between image-sarcasm and multi-sarcasm" not in p and "Official definition" in p
+
+
+def test_gemini_row_matches_raw_format(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("gemini_runner", "scripts/generate_rationales_gemini.py")
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    output = '{"text_alone": {"sarcastic": false, "reason": "a"}, "image_alone": {"sarcastic": true, "reason": "b"}, ' \
+             '"combined": {"sarcastic": false, "reason": "c"}, "is_sarcastic": true, "label": "image-sarcasm"}'
+    response = {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"thought": True, "text": "x"}, {"text": output}]}}],
+                "usageMetadata": {"promptTokenCount": 5}}
+    row = runner.to_row("1", "train", {"label_name": "multi-sarcasm"}, response, "m", 0.0, 1.234)
+    assert row["parsed"]["label"] == "image-sarcasm" and row["output"] == output and row["seconds"] == 1.23
+    assert row["label"] == "multi-sarcasm" and row["usage"] == {"promptTokenCount": 5}
+    env = tmp_path / ".env"
+    env.write_text("export GEMINI_API_KEY='abc'\n")
+    assert runner.load_api_key(env) in ("abc", __import__("os").environ.get("GEMINI_API_KEY"))

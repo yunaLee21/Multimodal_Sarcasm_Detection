@@ -14,7 +14,7 @@ from torchvision import transforms
 from vimmsd.data.augmentation import build_image_augment
 from vimmsd.data.image_io import PadToSquare, encoder_mean_color, open_image_rgb
 from vimmsd.data.image_text import compose_image_text, image_key
-from vimmsd.data.preprocessing import TextPreprocessor, clean_ocr
+from vimmsd.data.preprocessing import CAPTION_FILTERS, TextPreprocessor, clean_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -428,7 +428,37 @@ def load_all_records(cfg):
         splits["public_test"] = public
     if private is not None:
         splits["private_test"] = private
-    return splits
+    fold = cfg.data.get("fold") or {}
+    if fold.get("index") is not None:
+        held_out = fold_of(splits["train"], fold.get("k", 5), fold.get("seed", 42))
+        splits["train"] = [r for r in splits["train"] if held_out[r["id"]] != fold["index"]]
+    return apply_caption_filter(splits, cfg.data.get("caption_filter"))
+
+
+def fold_of(records, k=5, seed=42):
+    """{id: fold} chia stratified theo nhãn, cố định theo seed (B2: data.fold.index = fold bị giữ lại khi train).
+    Chỉ phụ thuộc id và nhãn nên script dự đoán out-of-fold tính lại được đúng cách chia."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    by_label = {}
+    for rec in sorted(records, key=lambda r: r["id"]):
+        by_label.setdefault(rec["label"], []).append(rec["id"])
+    for label in sorted(by_label):
+        ids = by_label[label]
+        for j, idx in enumerate(rng.permutation(len(ids))):
+            out[ids[idx]] = j % k
+    return out
+
+
+def apply_caption_filter(splits, name):
+    """data.caption_filter: xoá thẻ nguồn khỏi caption ở mọi split (preprocessing.CAPTION_FILTERS). null = giữ nguyên."""
+    if not name:
+        return splits
+    if name not in CAPTION_FILTERS:
+        raise ValueError(f"data.caption_filter không hợp lệ: {name!r}, chọn một trong {sorted(CAPTION_FILTERS)}")
+    edit = CAPTION_FILTERS[name]
+    seen = {}  # val = public_test cùng một list: giữ nguyên quan hệ này
+    return {key: seen.setdefault(id(recs), [{**r, "caption": edit(r["caption"])} for r in recs]) for key, recs in splits.items()}
 
 
 def build_image_transform(cfg, train, fill):

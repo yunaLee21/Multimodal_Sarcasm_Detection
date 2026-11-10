@@ -1,0 +1,60 @@
+# B2: 3 model riêng + stacking (docs/experiment_plan.md 7B). Mỗi model train 5 lần, mỗi lần giữ lại một fold của train
+# để dự đoán out-of-fold, cộng một lần trên toàn bộ train để dự đoán val. 18 run, 1 seed.
+#   python scripts/run_experiments.py --plan configs/experiments/b2_stacking.yaml --gpu-ids 0
+#   python scripts/stack_predictions.py
+name: b2_stacking
+seeds: [42]
+evaluate: [val]
+overrides: [train.num_workers=0]   # máy có /dev/shm 64 MB
+runs:
+  - config: configs/b2_text.yaml
+    name: b2_text_f0
+    overrides: [data.fold.index=0]
+  - config: configs/b2_text.yaml
+    name: b2_text_f1
+    overrides: [data.fold.index=1]
+  - config: configs/b2_text.yaml
+    name: b2_text_f2
+    overrides: [data.fold.index=2]
+  - config: configs/b2_text.yaml
+    name: b2_text_f3
+    overrides: [data.fold.index=3]
+  - config: configs/b2_text.yaml
+    name: b2_text_f4
+    overrides: [data.fold.index=4]
+  - config: configs/b2_text.yaml
+    name: b2_text_full
+  - config: configs/b2_image.yaml
+    name: b2_image_f0
+    overrides: [data.fold.index=0]
+  - config: configs/b2_image.yaml
+    name: b2_image_f1
+    overrides: [data.fold.index=1]
+  - config: configs/b2_image.yaml
+    name: b2_image_f2
+    overrides: [data.fold.index=2]
+  - config: configs/b2_image.yaml
+    name: b2_image_f3
+    overrides: [data.fold.index=3]
+  - config: configs/b2_image.yaml
+    name: b2_image_f4
+    overrides: [data.fold.index=4]
+  - config: configs/b2_image.yaml
+    name: b2_image_full
+  - config: configs/distill_flat_a.yaml
+    name: b2_multi_f0
+    overrides: [data.fold.index=0]
+  - config: configs/distill_flat_a.yaml
+    name: b2_multi_f1
+    overrides: [data.fold.index=1]
+  - config: configs/distill_flat_a.yaml
+    name: b2_multi_f2
+    overrides: [data.fold.index=2]
+  - config: configs/distill_flat_a.yaml
+    name: b2_multi_f3
+    overrides: [data.fold.index=3]
+  - config: configs/distill_flat_a.yaml
+    name: b2_multi_f4
+    overrides: [data.fold.index=4]
+  - config: configs/distill_flat_a.yaml
+    name: b2_multi_full

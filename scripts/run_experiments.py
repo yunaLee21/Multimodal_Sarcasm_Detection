@@ -16,6 +16,7 @@ import shutil
 import sys
 from datetime import datetime
 
+from vimmsd.analysis.experiment_report import refresh_report
 from vimmsd.utils.env import git_commit
 from vimmsd.utils.experiments import build_job, expand_runs, is_done, load_plan, plan_output_dir, run_output_dir, summarize
 from vimmsd.utils.gpu_queue import run_on_gpus
@@ -29,6 +30,7 @@ def main():
     parser.add_argument("--only", nargs="*", default=[], help="chỉ chạy run có tên chứa một trong các chuỗi này")
     parser.add_argument("--rerun", action="store_true", help="chạy lại cả run đã có kết quả")
     parser.add_argument("--dry-run", action="store_true", help="chỉ in lệnh sẽ chạy")
+    parser.add_argument("--wandb", action="store_true", help="bật wandb cho các run trong plan (wandb.enabled=true)")
     parser.add_argument("--extra-eval", nargs="*", default=[], choices=["val", "test"],
                         help="chạy thêm evaluate.py cho run đã train xong mà chưa có split này "
                              "(vd --extra-eval test ở bước đánh giá cuối)")
@@ -37,6 +39,9 @@ def main():
     plan = load_plan(args.plan)
     os.chdir(plan["root"])  # lệnh của job gọi scripts/train.py theo đường dẫn tương đối từ gốc repo
     specs = expand_runs(plan)
+    if args.wandb:
+        for spec in specs:
+            spec.overrides.append("wandb.enabled=true")
     out_dirs = {s.name: run_output_dir(s) for s in specs}
     selected = [s for s in specs if not args.only or any(k in s.name for k in args.only)]
 
@@ -88,6 +93,7 @@ def main():
 
     out, md = summarize(plan, specs, out_dirs)
     print(f"\nTổng hợp trên val ({out}):\n{md}")
+    refresh_report()
     failed = [j for j in finished if j.error]
     if failed:
         sys.exit("run lỗi: " + ", ".join(f"{j.name} ({j.error}, log {j.log})" for j in failed))

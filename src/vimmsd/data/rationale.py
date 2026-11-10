@@ -1,4 +1,4 @@
-"""Reasoning của teacher cho CoT distillation (docs/cot_distillation.md mục 3-4).
+"""Reasoning của teacher cho CoT distillation (docs/experiment_design.md mục 3-4).
 
 Luồng dữ liệu, mỗi bước một script:
     make_id_lists.py         -> rationales/ids/*.txt
@@ -18,48 +18,95 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v9"
 LABELS = ("not-sarcasm", "text-sarcasm", "image-sarcasm", "multi-sarcasm")
 RUBRIC = ("c1_text", "c2_image", "c3_combined", "c4_conclusion")
 PASS_REVIEWS = ("pass", "auto")  # auto = nhóm 1 không nằm trong mẫu kiểm tra ngẫu nhiên
 
-# CẦN ĐỐI CHIẾU với hướng dẫn gán nhãn của UIT DSC 2024 trước khi chạy cả tập (docs/cot_distillation_plan.md 1.1).
-LABEL_DEFINITIONS = """- not-sarcasm: bài đăng không có ý mỉa mai.
-- text-sarcasm: ý mỉa mai nằm ở caption; ảnh không góp phần tạo ra ý mỉa mai.
-- image-sarcasm: ý mỉa mai nằm ở ảnh (kể cả chữ trong ảnh); caption không góp phần tạo ra ý mỉa mai.
-- multi-sarcasm: ý mỉa mai chỉ hiểu được khi đọc caption cùng với ảnh (cả hai cùng góp phần)."""
+# Định nghĩa chính thức (docs/annotation_guideline.md, nguyên văn slide 2-3) và quy tắc suy ra từ dữ liệu
+# (docs/annotation_guideline_full.md mục 1, 3-8).
+LABEL_DEFINITIONS = """Official definition of the dataset authors:
+- Sarcasm is any sample that: employs irony by saying the opposite of what is meant, especially to mock or deride; contains a mismatch between the text and the image that suggests sarcasm through contradiction or exaggeration; uses hyperbole to overstate or understate reality in a way that is clearly not meant to be taken literally; incorporates sarcastic hashtags, emojis, or punctuation, which are commonly used to convey sarcasm online.
+- Not sarcasm is any sample that: conveys sentiments or statements that are straightforward and meant to be taken at face value; aligns directly with the image, supporting the literal interpretation of the text; does NOT contain linguistic or visual cues typically associated with sarcasm.
 
-PROMPT_TEMPLATE = """Bạn là chuyên gia phân tích mỉa mai (sarcasm) trên mạng xã hội Việt Nam. Cho một bài đăng gồm ảnh (đính kèm) và caption.
+How the dataset is actually labelled:
+- not-sarcasm (about 56% of posts): nothing and no one is mocked. This includes news, announcements, long articles (even sad or ironic events that are only reported), ads and promotions written in a fun tone, clickbait or exaggerated headlines, friendly teasing, self-deprecating memes and jokes without a target. Funny is NOT the same as sarcastic.
+- text-sarcasm (rare, under 1%): the CAPTION is the one being sarcastic (saying the opposite, ironic praise, mocking wordplay, ironic quotes, often with :)) =)) or 🙃), and the image is neutral (a news card, a photo, a product, a screenshot of someone's statement) that only shows what the caption mocks.
+- image-sarcasm (about 4%): the IMAGE is a complete joke with its own punchline (meme with text, comic, chat or comment screenshot), and the caption adds nothing sarcastic of its own: only emoji, "Tôi:", "Ủa", a short reaction, a line of dialogue, a series title, a page signature, or neutral information.
+- multi-sarcasm (about 39%): (A) the image is a joke AND the caption adds its own sarcastic idea (ironic praise, continuing the joke, playing a character, a mocking conclusion, wordplay); or (B) the caption invents a story, plays a role or says the opposite of what a neutral image shows, so the irony comes from the gap between them.
+
+Rules:
+- Text inside the image (memes, screenshots, printed headlines) belongs to the IMAGE.
+- Ignore page signatures and source tags such as "-kem", "- Elsa", "#interpool", "#WMO", "#VOZ_F33", "trollxe"; they carry no meaning.
+- Sarcasm needs a target being mocked (a person, a group, a product, an event) or a meaning said backwards. Reporting an ironic event in a neutral way is not sarcasm.
+- When unsure between text-sarcasm and multi-sarcasm, prefer multi-sarcasm: it is about 55 times more common."""
+
+# Mẫu thật trong train (docs/annotation_guideline_full.md), không thuộc pilot_eval, natural_dev; phần Output viết tay
+# theo nhãn gốc. Không có ảnh đính kèm nên mỗi ví dụ mô tả ảnh bằng chữ. Các mẫu này không được đưa vào sinh
+# reasoning (DATASET_EXAMPLE_IDS); giữ cả mẫu ví dụ của v5-v8 để các lần chạy cũ và mới cùng tập mẫu.
+DATASET_EXAMPLE_IDS = {"573", "7701", "1795", "424", "8262", "2255", "4329", "4117", "3984", "9459", "8562"}
+DATASET_EXAMPLES = r"""Caption: "🤡 BILLIE EILISH ADD HẾT 113M FOLLOWERS VÀO CLOSE FRIEND - MỞ MẮT DẬY THẤY THÀNH BEST FRIEND LÚC NÀO KHÔNG HAY"
+Image: two screenshots of Billie Eilish's Instagram profile (113M followers), before and after a green "close friend" ring appears.
+Output: {"text_alone": {"sarcastic": false, "reason": "Tiêu đề giật tít, emoji 🤡 chỉ để gây chú ý, không chế giễu ai."}, "image_alone": {"sarcastic": false, "reason": "Hai ảnh chụp trang cá nhân minh hoạ đúng tin."}, "combined": {"sarcastic": false, "reason": "Caption và ảnh cùng đưa một tin vui về người nổi tiếng."}, "is_sarcastic": false, "label": "not-sarcasm"}
+
+Caption: "HƯỚNG DẪN CH.ỐT VARIO MỘT TRĂM SÁU CHỤC. Hơn cả một chiếc xe, VARIO là Sonic của tay ga, là Dream của tuổi trẻ, là Winner của tình trường!"
+Image: a cartoon salesman showing a scooter, text "Mời anh đứng thẳng nghiêm túc chỉnh tề - OK. Giờ là 1 phút mặc niệm dành cho showroom ngoài!", logo trollxe.
+Output: {"text_alone": {"sarcastic": false, "reason": "Caption là quảng cáo xe giọng vui, khen thật chứ không nói ngược."}, "image_alone": {"sarcastic": false, "reason": "Meme quảng cáo đùa vui, không có mục tiêu bị chế giễu rõ ràng."}, "combined": {"sarcastic": false, "reason": "Cả hai cùng quảng bá chiếc xe, hài hước nhưng không châm biếm."}, "is_sarcastic": false, "label": "not-sarcasm"}
+
+Caption: "Thôi sếp nói gì cũng đúng, lười cãi nữa rồi"
+Image: only the number "-57.62%" in red (an investment account in loss).
+Output: {"text_alone": {"sarcastic": true, "reason": "\"Sếp nói gì cũng đúng\" là nói ngược, ý chê lời khuyên của sếp đã làm lỗ."}, "image_alone": {"sarcastic": false, "reason": "Ảnh chỉ là con số lỗ -57.62%, không tự châm biếm."}, "combined": {"sarcastic": false, "reason": "Ảnh chỉ cho biết bối cảnh, lời mỉa mai nằm ở caption."}, "is_sarcastic": true, "label": "text-sarcasm"}
+
+Caption: "😭"
+Image: chat screenshot. A blurred "Xem ai thích bạn" panel, someone asks "Đây là gì zạ, mạng lag đúng hong", the reply: "K, là nghèo đấy".
+Output: {"text_alone": {"sarcastic": false, "reason": "Caption chỉ là emoji phản ứng."}, "image_alone": {"sarcastic": true, "reason": "Câu trả lời \"là nghèo đấy\" chế giễu người không trả tiền nên ảnh bị làm mờ."}, "combined": {"sarcastic": false, "reason": "Emoji không thêm ý mỉa mai riêng, câu chốt nằm trong ảnh."}, "is_sarcastic": true, "label": "image-sarcasm"}
+
+Caption: "Tôi:"
+Image: Korean drama stills with subtitles: "Cái khóa đâu? Lấy khóa ra đây." "Để làm gì ạ?" "Phải khóa mồm thằng này lại thôi."
+Output: {"text_alone": {"sarcastic": false, "reason": "\"Tôi:\" chỉ mở đầu cho ảnh, không có ý gì riêng."}, "image_alone": {"sarcastic": true, "reason": "Câu chốt \"phải khoá mồm thằng này lại\" chế giễu người nói nhiều."}, "combined": {"sarcastic": false, "reason": "Caption chỉ gắn trò đùa trong ảnh vào người đăng, không thêm tầng nghĩa mới."}, "is_sarcastic": true, "label": "image-sarcasm"}
+
+Caption: "Thôi để 31/6 rồi đá lại =))"
+Image: football meme of De Ligt being interviewed: "Trọng tài biên đã nói với tôi rằng: xin lỗi, tôi đã phạm sai lầm", "Thật đáng xấu hổ".
+Output: {"text_alone": {"sarcastic": true, "reason": "Hẹn \"31/6\", ngày không tồn tại, là cách nói ngược rằng sẽ không bao giờ đá lại."}, "image_alone": {"sarcastic": true, "reason": "Lời xin lỗi muộn màng của trọng tài được dựng lại để chế giễu."}, "combined": {"sarcastic": true, "reason": "Caption đùa tiếp câu chuyện trong ảnh, thêm một tầng mỉa mai của riêng nó."}, "is_sarcastic": true, "label": "multi-sarcasm"}
+
+Caption: "THẢ CÁ ÔNG CÔNG ÔNG TÁO TẠI XỨ SỞ HOA ANH ĐÀO 😍 Một bức ảnh quá nhiều cảm xúc..."
+Image: a real photo of thousands of dead fish washed up on a beach in Japan.
+Output: {"text_alone": {"sarcastic": true, "reason": "Gọi một sự việc buồn là \"thả cá ông Công ông Táo\" kèm 😍 là nói ngược."}, "image_alone": {"sarcastic": false, "reason": "Ảnh thật về cá chết hàng loạt, tự nó không châm biếm."}, "combined": {"sarcastic": true, "reason": "Ý mỉa mai đến từ khoảng cách giữa lời vui vẻ của caption và cảnh cá chết trong ảnh."}, "is_sarcastic": true, "label": "multi-sarcasm"}"""
+
+PROMPT_TEMPLATE = """You are an expert in sarcasm on Vietnamese social media. You are given a post with an image (attached) and a Vietnamese caption.
 
 Caption: \"\"\"{caption}\"\"\"
-Chữ đọc được trong ảnh (OCR, có thể sai hoặc thiếu): \"\"\"{ocr}\"\"\"
+Text read from the image (OCR, may be wrong or incomplete): \"\"\"{ocr}\"\"\"
 
-Định nghĩa nhãn:
 {definitions}
-{label_hint}
-Phân tích theo đúng 4 bước:
-1. Chỉ đọc caption, không nhìn ảnh: caption có mỉa mai không? Dẫn chứng cụ thể từ caption.
-2. Chỉ nhìn ảnh (kể cả chữ trong ảnh), không đọc caption: ảnh có mỉa mai không? Mô tả khách quan những gì thấy trong ảnh, không suy diễn.
-3. Ghép caption với ảnh: có mâu thuẫn, phóng đại, hay ý mỉa mai mới xuất hiện không?
-4. Kết luận đúng một nhãn.
 
-Chỉ trả lời bằng MỘT object JSON, không thêm chữ nào khác:
-{{"text_alone": {{"sarcastic": true hoặc false, "reason": "..."}}, "image_alone": {{"sarcastic": true hoặc false, "reason": "..."}}, "combined": {{"reason": "..."}}, "label": "not-sarcasm | text-sarcasm | image-sarcasm | multi-sarcasm"}}"""
+Examples from the dataset, with the expected output (their images are described in words):
+{dataset_examples}
+{label_hint}
+Decide step by step:
+Step 1 - Caption only, ignoring the image: does it mock someone or say the opposite of what it means? Quote the words. A reaction, emoji, signature, dialogue line or information is not sarcastic.
+Step 2 - Image only (including any text in it), ignoring the caption: describe what you see, then decide whether it is a joke with a target being mocked.
+Step 3 - Together: does the caption add its own sarcastic idea to the image, or contradict what a neutral image shows?
+Step 4 - Label: nothing mocked -> not-sarcasm; punchline only in the image and the caption adds nothing -> image-sarcasm; caption sarcastic and the image only shows its subject -> text-sarcasm; both, or the irony comes from combining them -> multi-sarcasm.
+
+Write every "reason" in Vietnamese. Answer with exactly ONE JSON object and nothing else, filling the fields in this order:
+{{"text_alone": {{"sarcastic": true or false, "reason": "..."}}, "image_alone": {{"sarcastic": true or false, "reason": "..."}}, "combined": {{"sarcastic": true or false, "reason": "..."}}, "is_sarcastic": true or false, "label": "not-sarcasm | text-sarcasm | image-sarcasm | multi-sarcasm"}}"""
 
 LABEL_HINT = """
-Nhãn đúng của bài đăng này là: {label}. Hãy giải thích vì sao bài đăng có nhãn này theo đúng 4 bước, và kết luận đúng nhãn đó.
+The correct label of this post is: {label}. Explain why the post has this label, following the steps below, and conclude with exactly that label.
 """
 
 MAX_CAPTION_CHARS = 1500  # caption tin tức dài tới ~850 từ; cắt để prompt không quá dài
 
 
 def build_prompt(caption, ocr="", label=None):
-    """Prompt CoT 4 bước. `label` != None: rationalization (đưa nhãn đúng, yêu cầu giải thích)."""
+    """Prompt CoT 4 bước (tiếng Anh, reason vẫn viết tiếng Việt để PhoBERT mã hoá). `label` != None: rationalization (đưa nhãn đúng, yêu cầu giải thích)."""
     caption = (caption or "").strip()
     if len(caption) > MAX_CAPTION_CHARS:
         caption = caption[:MAX_CAPTION_CHARS] + " ..."
-    return PROMPT_TEMPLATE.format(caption=caption, ocr=(ocr or "").strip() or "(không có)",
+    return PROMPT_TEMPLATE.format(caption=caption, ocr=(ocr or "").strip() or "(none)",
                                   definitions=LABEL_DEFINITIONS,
+                                  dataset_examples=DATASET_EXAMPLES,
                                   label_hint=LABEL_HINT.format(label=label) if label else "")
 
 
@@ -402,18 +449,26 @@ def split_records(cfg, split, with_ocr=True):
 class TeacherVLM:
     """Sinh reasoning bằng VLM của transformers (mặc định Qwen/Qwen2.5-VL-7B-Instruct).
     k lần sinh mỗi mẫu bằng num_return_sequences (cần temperature > 0). device_map="auto" để chia model lớn
-    (vd bản 32B) ra nhiều GPU; khi đó chạy 1 tiến trình thay vì mỗi GPU một shard."""
+    (vd bản 32B) ra nhiều GPU; khi đó chạy 1 tiến trình thay vì mỗi GPU một shard.
+    load_in_4bit=True: lượng tử hoá nf4 (bitsandbytes) cho GPU ít VRAM, bản 7B còn khoảng 5.4 GB."""
 
-    def __init__(self, model_name="Qwen/Qwen2.5-VL-7B-Instruct", max_pixels=640 * 28 * 28, device_map="cuda"):
-        from transformers import AutoModelForImageTextToText, AutoProcessor
+    def __init__(self, model_name="Qwen/Qwen2.5-VL-7B-Instruct", max_pixels=640 * 28 * 28, device_map="cuda",
+                 load_in_4bit=False):
+        from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
 
         from vimmsd.data.image_text import _dtype_kwargs, vlm_dtype
 
         self.model_name = model_name
         self.processor = AutoProcessor.from_pretrained(model_name, min_pixels=128 * 28 * 28, max_pixels=max_pixels)
         self.processor.tokenizer.padding_side = "left"  # sinh theo batch cần pad bên trái
-        self.model = AutoModelForImageTextToText.from_pretrained(
-            model_name, device_map=device_map, **_dtype_kwargs(vlm_dtype())).eval()
+        if load_in_4bit:
+            dtype_kwargs = {"quantization_config": BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=vlm_dtype(),
+                bnb_4bit_use_double_quant=True)}
+        else:
+            dtype_kwargs = _dtype_kwargs(vlm_dtype())
+        self.model = AutoModelForImageTextToText.from_pretrained(model_name, device_map=device_map,
+                                                                 **dtype_kwargs).eval()
 
     def generate(self, images, prompts, k=1, temperature=0.7, top_p=0.9, max_new_tokens=512):
         """images: list[PIL.Image], prompts: list[str] -> list[list[str]] (k chuỗi mỗi mẫu)."""

@@ -58,7 +58,7 @@ Thách thức chính của bài toán:
 6. **Thử nghiệm mở rộng (nếu còn thời gian)**
    - Ablation đóng góp của text trích từ ảnh: chỉ caption, + OCR, + mô tả VLM, + cả hai.
    - So sánh với cách tiếp cận zero-shot/few-shot bằng mô hình ngôn ngữ đa phương thức (LLM đa modal).
-   - Chưng cất reasoning từ LLM đa phương thức: teacher sinh reasoning theo khung "text đứng riêng / ảnh đứng riêng / khi ghép" trên tập train, lọc theo đáp án đúng, cho người kiểm tra, rồi dùng làm loss phụ cho model nhỏ. Hai phương pháp: **M1** CoT distillation (đầu ra 4 lớp phẳng) và **M2** CoT distillation + hierarchical (đầu ra phân cấp mềm: có châm biếm không, rồi loại nào). Thiết kế chi tiết: `docs/cot_distillation.md`.
+   - Chưng cất reasoning từ LLM đa phương thức: teacher sinh reasoning theo khung "text đứng riêng / ảnh đứng riêng / khi ghép" trên tập train, lọc theo đáp án đúng, cho người kiểm tra, rồi dùng làm loss phụ cho model nhỏ. Các phương pháp: **M1** CoT distillation (đầu ra 4 lớp phẳng), **M2** CoT distillation + hierarchical (đầu ra phân cấp mềm: có châm biếm không, rồi loại nào), và **M3** CoT distillation + subclass (tách `multi` lúc train, chưa có code). Thiết kế chi tiết: `docs/experiment_design.md`.
 
 7. **Đánh giá mô hình**
    - Đánh giá bằng Precision, Recall, F1 (ưu tiên macro-F1 do dữ liệu mất cân bằng).

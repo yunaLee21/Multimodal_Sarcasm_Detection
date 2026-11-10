@@ -1,4 +1,4 @@
-"""Head phân loại cho CoT distillation (docs/cot_distillation.md mục 5).
+"""Head phân loại cho CoT distillation (docs/experiment_design.md mục 5).
 
 - flat: head MLP 4 lớp như cũ (giữ nguyên tên tham số `head.*` để load được checkpoint cũ).
 - hierarchical (M2): tầng S "có châm biếm không" (sigmoid) × tầng C "loại nào" (softmax text / image / multi),

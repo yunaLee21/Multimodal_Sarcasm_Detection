@@ -1,0 +1,9 @@
+# B2 (docs/experiment_design.md mục 5.6), model T: chỉ caption, PhoBERT đóng băng. Cùng tiêu chí chọn checkpoint và
+# hiệu chỉnh prior với distill_base để so được với distill_flat_a (model M của B2).
+inherit: text_only_frozen.yaml
+train:
+  select_metric: macro_f1
+  select_exclude_labels: [text-sarcasm]
+  eval_test: false
+eval:
+  prior_correction: true

@@ -57,7 +57,7 @@ data:
     # cache trung gian của notebook 01b, mỗi bước một file; đổi model OCR/VLM thì dùng thư mục cache mới
     ocr_cache: ocr.json
     description_cache: description.json
-  # CoT distillation (docs/cot_distillation.md): reasoning của teacher đạt rubric, chỉ gắn vào mẫu train
+  # CoT distillation (docs/experiment_design.md): reasoning của teacher đạt rubric, chỉ gắn vào mẫu train
   rationale:
     use: false
     dir: null                      # null = <paths.cache_dir>/rationales
@@ -111,6 +111,11 @@ train:
   select_metric: macro_f1      # macro_f1 | weighted_f1: điểm val để chọn best.pt và early stopping
   select_exclude_labels: []    # macro_f1 bỏ các lớp này, vd [text-sarcasm] (val chỉ có 1 mẫu)
   eval_test: true              # chấm test (private test) cuối mỗi run; false = chỉ chấm một lần ở bước cuối
+
+wandb:
+  enabled: false   # true: log metric mỗi epoch lên wandb (utils/tracking.py, cần wandb login hoặc WANDB_API_KEY)
+  project: vimmsd
+  entity: null     # tên team trên wandb; null = tài khoản cá nhân
 
 eval:
   prior_correction: false      # evaluate.py ghi thêm kết quả hiệu chỉnh prior theo val (hậu tố _prior)
