@@ -106,6 +106,7 @@ IE403/
 │           ├── experiments.py     # plan config × seed: dựng job cho gpu_queue, tổng hợp kết quả các seed
 │           ├── seed.py            # set seed cho reproducibility
 │           ├── checkpoint.py      # save/load checkpoint (tương thích Drive/Kaggle)
+│           ├── tracking.py        # theo dõi run bằng wandb, tắt mặc định, lỗi wandb không làm dừng train
 │           └── gpu_queue.py       # chạy nhiều run song song, mỗi GPU một run (Kaggle T4 x2 hoặc GPU server)
 │
 ├── scripts/                  # mỗi bước một script; trên GPU server chỉ dùng thư mục này (mục 7)
@@ -192,6 +193,9 @@ IE403/
   - **Colab**: lưu thẳng lên Google Drive.
   - **GPU server**: lưu vào `data/server/outputs/<tên thí nghiệm>/` (symlink ra ổ dữ liệu). Không bị ngắt session nên chỉ cần `resume_from` khi tự dừng.
 - **Kết quả thí nghiệm**: mỗi lần train xong, ghi 1 dòng vào `reports/results.md` (config dùng, **commit hash** của code, môi trường, macro-F1, thời gian train) để cả nhóm theo dõi tiến độ chung mà không cần hỏi nhau qua chat. Commit hash giúp tái lặp đúng kết quả, vì notebook luôn clone code mới nhất.
+- **Theo dõi bằng wandb** (tuỳ chọn, mặc định tắt): log loss, loss thành phần, learning rate của head và metric val mỗi epoch; các seed của một config vào chung một group. Private test chỉ ghi vào summary. Không upload checkpoint, ảnh hay caption.
+  - **Đăng nhập**: server dùng `wandb login`; Kaggle thêm secret `WANDB_API_KEY` rồi gán vào `os.environ`. Không có mạng thì đặt `WANDB_MODE=offline`, sau đó chạy `wandb sync`.
+  - **Chạy**: `python scripts/train.py --config <config> --override wandb.enabled=true`, hoặc `python scripts/run_experiments.py --plan <plan> --wandb`. Team: thêm `wandb.entity=<tên team>`, hoặc đặt biến `WANDB_ENTITY`.
 - **Chia sẻ cache giữa server và Kaggle**: cache sinh trên server (`text_preprocessed.json`, `image_preprocessed.json`, `rationale_dataset.json`) được upload thành phiên bản mới của Kaggle dataset, để các thành viên chạy Kaggle dùng đúng cùng dữ liệu (mục 7.6).
 
 ---
@@ -489,6 +493,7 @@ paddlepaddle         # backend cho paddleocr
 einops               # cần cho vietocr (và Vintern)
 gdown                # cần cho vietocr
 kaggle               # download data qua API (chỉ dùng local)
+wandb                # theo dõi run, chỉ dùng khi wandb.enabled=true
 pytest
 ```
 

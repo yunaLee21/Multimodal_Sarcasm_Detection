@@ -10,6 +10,7 @@ from transformers import get_linear_schedule_with_warmup
 
 from vimmsd.training.metrics import compute_metrics, format_metrics
 from vimmsd.utils.checkpoint import load_checkpoint, resolve_resume_path, save_checkpoint
+from vimmsd.utils.tracking import NullTracker, metric_scalars
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,9 @@ class Trainer:
 
     Mỗi epoch lưu `last.pt` (để resume khi session bị ngắt) và `best.pt` theo macro-F1 trên val."""
 
-    def __init__(self, model, loss_fn, loaders, cfg, output_dir):
+    def __init__(self, model, loss_fn, loaders, cfg, output_dir, tracker=None):
         self.model = model
+        self.tracker = tracker or NullTracker()
         self.loss_fn = loss_fn
         self.loaders = loaders
         self.cfg = cfg
@@ -124,6 +126,7 @@ class Trainer:
             total += loss.item() * len(batch["labels"])
             n += len(batch["labels"])
             pbar.set_postfix(loss=f"{total / n:.4f}")
+        self.last_loss_parts = {k: v / max(n, 1) for k, v in part_sums.items()} if len(part_sums) > 1 else {}
         if len(part_sums) > 1:  # chỉ log khi có loss phụ
             logger.info("epoch %d | loss thành phần %s", epoch + 1,
                         " ".join(f"{k}={v / max(n, 1):.4f}" for k, v in part_sums.items()))
@@ -167,6 +170,12 @@ class Trainer:
                 (self.output_dir / "best_val_metrics.json").write_text(json.dumps(metrics, indent=2))
             else:
                 self.bad_epochs += 1
+
+            self.tracker.log({"epoch": epoch + 1, "train/loss": train_loss,
+                              **{f"train/loss_{k}": v for k, v in self.last_loss_parts.items()},
+                              "train/lr_head": self.optimizer.param_groups[0]["lr"],
+                              **metric_scalars(metrics, "val"), "val/select": score, "val/best_select": self.best_f1},
+                             step=epoch + 1)
 
             save_checkpoint(self.output_dir / "last.pt", self.model, self.optimizer, self.scheduler, self.scaler,
                             epoch=epoch, best_f1=self.best_f1, bad_epochs=self.bad_epochs,

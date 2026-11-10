@@ -903,9 +903,25 @@ Train lại và đánh giá khi caption không có thẻ nguồn, hashtag và ch
 | `hier_cascade_s2` | 0.514 | 0.483 | 0.492 | 0.490 | k=5, τ=0.05, λ=0.5 | 0.000 | 0.000 | 0.802 | 0.019 | 0.633 |
 | `hier_cascade_s42` | 0.507 | 0.472 | 0.484 | 0.480 | k=5, τ=0.1, λ=0.5 | 0.000 | 0.000 | 0.814 | 0.020 | 0.607 |
 
+Không hiệu chỉnh prior ở cả model và kNN (`--no-prior`); cột "Prior, không kNN" khi đó là model gốc:
+
+| Run | Chưa hiệu chỉnh prior | Prior, không kNN (λ = 1) | kNN tốt nhất | kNN, kiểm định chéo | Tham số | F1 `image`, λ = 1 | F1 `image`, kNN | sim láng giềng gần nhất | Tỉ lệ sim ≥ 0,9 | Trùng nhãn láng giềng |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `distill_flat_a_s1` | 0.537 | 0.537 | 0.540 | 0.529 | k=20, τ=0.05, λ=0.9 | 0.102 | 0.106 | 0.790 | 0.013 | 0.616 |
+| `distill_flat_a_s2` | 0.520 | 0.520 | 0.528 | 0.500 | k=50, τ=0.2, λ=0.5 | 0.130 | 0.120 | 0.604 | 0.001 | 0.632 |
+| `distill_flat_a_s42` | 0.507 | 0.507 | 0.509 | 0.503 | k=50, τ=0.05, λ=0.9 | 0.000 | 0.000 | 0.832 | 0.035 | 0.621 |
+| `distill_hier_b_s1` | 0.512 | 0.512 | 0.539 | 0.516 | k=10, τ=0.05, λ=0.9 | 0.069 | 0.133 | 0.722 | 0.003 | 0.630 |
+| `distill_hier_b_s2` | 0.519 | 0.519 | 0.534 | 0.512 | k=50, τ=0.05, λ=0.5 | 0.105 | 0.118 | 0.725 | 0.003 | 0.636 |
+| `distill_hier_b_s42` | 0.504 | 0.504 | 0.507 | 0.505 | k=10, τ=0.1, λ=0.9 | 0.000 | 0.000 | 0.808 | 0.017 | 0.616 |
+| `hier_cascade_s1` | 0.499 | 0.499 | 0.504 | 0.499 | k=10, τ=0.2, λ=0.5 | 0.000 | 0.000 | 0.817 | 0.018 | 0.604 |
+| `hier_cascade_s2` | 0.514 | 0.514 | 0.517 | 0.493 | k=50, τ=0.1, λ=0.5 | 0.053 | 0.065 | 0.802 | 0.019 | 0.633 |
+| `hier_cascade_s42` | 0.507 | 0.507 | 0.509 | 0.507 | k=10, τ=0.05, λ=0.9 | 0.000 | 0.000 | 0.814 | 0.020 | 0.607 |
+
 Trên val, theo tiêu chí macro-F1 bỏ `text-sarcasm`. "Kiểm định chéo" chọn tham số trên phần còn lại của val, nên công bằng hơn "kNN tốt nhất". Mốc λ = 1 có hiệu chỉnh prior như thiết kế.
 
 **Không giữ E1.** So với λ = 1, kiểm định chéo: `distill_flat_a` -0,6 điểm, `distill_hier_b` +1,7, `hier_cascade` +0,6. Hai hàng sau vượt mức lệch giữa các seed, nhưng cả ba hàng vẫn thấp hơn cùng model chưa hiệu chỉnh prior khoảng 2,3–3,0 điểm (0,491/0,488/0,484 so với 0,521/0,512/0,507), và phần tăng chủ yếu bù lại mức giảm do hiệu chỉnh prior. F1 `image-sarcasm` không cải thiện.
+
+**Bản không hiệu chỉnh prior (`--no-prior`), so trực tiếp với model gốc:** kiểm định chéo thấp hơn model gốc ở cả 3 hàng: `distill_flat_a` -1,1 điểm, `distill_hier_b` -0,05, `hier_cascade` -0,7. Điểm dò trên chính val có tăng 0,3–1,5 điểm nhưng mất khi chọn tham số ngoài mẫu, tức là phần tăng đó là do dò quá khớp với val. F1 `image-sarcasm` không tăng ở seed nào. Kết luận không giữ E1 vẫn đúng với cả hai cách.
 
 Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5% mẫu val có láng giềng gần nhất với sim ≥ 0,9, và nhãn láng giềng gần nhất chỉ đúng 60–64%, thấp hơn luôn đoán `multi-sarcasm` (66,7%).
 
@@ -935,6 +951,7 @@ Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5%
 | `natural_dev_v7_gemini-3.5-flash-lite` | gemini-3.5-flash-lite | v7 | 500 | 0.588 | 0.346 | 0.677 | 0.000 | 0.098 | 0.609 | 2.0% | 1.8 |
 | `natural_dev_v7_qwen3-vl-8b` | Qwen/Qwen3-VL-8B-Instruct | v7 | 500 | 0.468 | 0.204 | 0.208 | 0.000 | 0.000 | 0.606 | 1.8% | 8.5 |
 | `natural_dev_v8_gemini-3.5-flash-lite` | gemini-3.5-flash-lite | v8 | 500 | 0.568 | 0.326 | 0.655 | 0.000 | 0.047 | 0.602 | 2.6% | 2.4 |
+| `natural_dev_v9_qwen3-vl-8b` | Qwen/Qwen3-VL-8B-Instruct | v9 | 500 | 0.506 | 0.231 | 0.302 | 0.000 | 0.000 | 0.623 | 0.2% | 7.7 |
 
 ### val (public test, 1 413 mẫu)
 
@@ -960,6 +977,8 @@ Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5%
 
 **Bỏ luật "khi phân vân thì chọn multi" (v8).** Trên `natural_dev`, phân bố dự đoán gần như không đổi so với v7: accuracy 56,8% so với 58,8%, macro-F1 0,326 so với 0,346. Câu nói `multi-sarcasm` phổ biến hơn vẫn được giữ. Trên val, 196/942 mẫu `multi-sarcasm` bị đoán thành `image-sarcasm`; accuracy 58,9%, thấp hơn luôn đoán `multi-sarcasm` (66,7%).
 
+**Prompt v9 (định nghĩa chính thức, quy tắc suy ra từ dữ liệu, 7 ví dụ có mô tả ảnh) với Qwen3-VL-8B 4-bit trên `natural_dev`:** accuracy 50,6% (v7: 46,8%), macro-F1 bỏ `text-sarcasm` 0,308 (v7: 0,272), parse lỗi 0,2%. Vẫn đoán `multi-sarcasm` cho 446/499 mẫu, 230/280 mẫu `not-sarcasm` bị đoán `multi`, và `image-sarcasm` 0/15. Vẫn thấp hơn luôn đoán `not-sarcasm` (56%) và thấp xa Flash Lite v8 (0,435). Cờ châm biếm có giảm (caption: 87% xuống 75% trên mẫu `not-sarcasm`) nhưng vẫn bật cho phần lớn bài không châm biếm. Prompt tốt hơn không khắc phục được thiên lệch của model này.
+
 **Chi phí (ước tính, giá lấy từ nguồn tổng hợp, chưa đối chiếu giá chính thức).** Flash Lite khoảng 0,0014 USD mỗi lần sinh: khoảng 10 USD cho lô 1–3 với k = 1, khoảng 30 USD với k theo kế hoạch. Gemini Pro khoảng 35 USD cho val và khoảng 500 USD cho các lô.
 
 ### E2: few-shot
@@ -969,6 +988,8 @@ Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5%
 **Thử giải thích khi đã cho nhãn đúng (Qwen3-VL-8B 4-bit, v8, 100 mẫu train, ngoài `pilot_eval`), 8 giây/mẫu, chưa sinh cả tập.** 98/100 đọc được; 92/100 kết luận đúng nhãn đã cho, riêng `text-sarcasm` 16/20. Cờ text/ảnh khớp nhãn ở 95/100 mẫu, tức gần như chép lại nhãn gốc, nên cột (c) sẽ gần trùng cột (b).
 
 Đọc thử 13 mẫu, đối chiếu ảnh ở 4 mẫu (chưa phải chấm rubric): mô tả bề mặt và lý do cho mẫu `not-sarcasm` thường đọc được; phần giải thích ý mỉa mai yếu. Lỗi gặp: nhận nhầm ảnh miệng rùa biển thành cá mập (1244); bịa nghĩa "số 13 xui xẻo" trong khi câu đùa là chồng được nhận lại máy cũ của vợ (4032); bỏ sót chơi chữ Nissan/Mitsubishi trong meme (2559); lý do mâu thuẫn với nhãn được giao (2259, 3832). File chấm: `outputs/cot_distill/label_given_review.csv`.
+
+**Quyết định (2026-11-03): dừng M1, M2, M3.** Teacher miễn phí (Qwen) không viết được lý do đáng tin, teacher trả phí không còn ngân sách. Phương án người viết giải thích cũng bị loại: nhóm không suy ra được quy tắc gán nhãn của bộ dữ liệu, bộ dữ liệu không công bố hướng dẫn gán nhãn, và `docs/labeling_guidelines.md` được dựng từ vài mẫu nên không khái quát được. Lý do viết cho nhãn mà người viết không hiểu sẽ chỉ là hợp lý hoá. Sheet đã tạo (`outputs/human_explanations/`) không được dùng.
 
 ## 8. Giai đoạn 3: phân nhóm và rationalization
 
@@ -1032,6 +1053,21 @@ Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5%
 
 ### B2: 3 model riêng + stacking
 
+| Cách | Out-of-fold trên train | Val | Val, hiệu chỉnh prior | F1 `image`, val |
+|---|---|---|---|---|
+| Model `text` riêng | 0.496 | 0.504 | 0.479 | 0.000 |
+| Model `image` riêng | 0.435 | 0.467 | 0.476 | 0.000 |
+| Model `multi` riêng | 0.526 | 0.507 | 0.489 | 0.000 |
+| Trung bình xác suất 3 model |  | 0.500 | 0.484 | 0.000 |
+| Stacking, tốt nhất trên val (0.01, none, False) |  | 0.505 |  | 0.000 |
+| Stacking, kiểm định chéo trong val |  | 0.503 |  | 0.000 |
+
+1 seed (42), macro-F1 bỏ `text-sarcasm` trên val. Model đa phương thức của B2 cùng cấu hình và seed với `distill_flat_a_s42` và cho đúng cùng điểm (0,507), nên các con số so được trực tiếp với seed đó, không phải với trung bình 3 seed (0,521).
+
+**Không giữ B2.** Stacking 0,504 (kiểm định chéo 0,504), trung bình xác suất 0,501, đều không hơn model đa phương thức một mình (0,507). Classifier gộp gần như chỉ dựa vào model đa phương thức. F1 `image-sarcasm` bằng 0 ở cả 3 model riêng và ở bản gộp: model chỉ-ảnh cũng không học được lớp này.
+
+**Text-only cho D1:** model chỉ caption đạt 0,504, gần bằng model đa phương thức (0,507) và hơn model chỉ-ảnh (0,467). Ảnh, OCR và mô tả gần như không thêm gì vào điểm tổng, khớp với kết quả đổi ảnh của D1. Cần nhiều seed hơn để tách được chênh lệch 0,3 điểm này khỏi nhiễu.
+
 ### E3: pretrain trên dữ liệu ngoài
 
 ## 13. Trả lời các câu hỏi thí nghiệm
@@ -1056,4 +1092,5 @@ Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5%
 
 ## 16. Hạn chế
 
+- Hướng dẫn gán nhãn chính thức (`docs/annotation_guideline.md`) chỉ định nghĩa có/không châm biếm; ranh giới giữa `text`, `image` và `multi` chỉ có 9 ví dụ. 5 ví dụ có trong bộ dữ liệu, 3 trong số đó mang nhãn khác với slide (train 8517, train 493, private test 545).
 - Val chỉ có 1 mẫu `text-sarcasm` và 28 mẫu `image-sarcasm`, nên F1 các lớp này rất nhạy với vài mẫu.
