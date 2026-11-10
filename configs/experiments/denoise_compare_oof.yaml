@@ -1,0 +1,12 @@
+# Như denoise_compare.yaml nhưng bản sạch có thêm 540 drop_mislabel (bước 3 dùng xác suất out-of-fold của B2 multi):
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/denoise_compare_oof.yaml --gpu-ids 0
+# Run trên bản gốc dùng lại từ denoise_compare (text_only_orig_s*, image_only_orig_s*); run *_cleancl đọc data/server/raw.
+name: denoise_compare_oof
+seeds: [42, 1, 2]
+overrides: [train.num_workers=0]   # /dev/shm của máy này chỉ 64 MB
+evaluate: [val]
+runs:
+  - config: configs/text_only.yaml
+    name: text_only_cleancl
+  - config: configs/image_only.yaml
+    name: image_only_cleancl
