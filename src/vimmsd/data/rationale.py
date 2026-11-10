@@ -18,75 +18,89 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v8"
+PROMPT_VERSION = "v9"
 LABELS = ("not-sarcasm", "text-sarcasm", "image-sarcasm", "multi-sarcasm")
 RUBRIC = ("c1_text", "c2_image", "c3_combined", "c4_conclusion")
 PASS_REVIEWS = ("pass", "auto")  # auto = nhóm 1 không nằm trong mẫu kiểm tra ngẫu nhiên
 
-# Theo hướng dẫn gán nhãn docs/labeling_guidelines.md (mục 2-4). Tài liệu mâu thuẫn ở trường hợp caption và ảnh trái
-# ngược nhau (2.3 ghi image-sarcasm, 2.4 ghi multi-sarcasm): ở đây theo bảng quyết định mục 3, tức multi-sarcasm.
-LABEL_DEFINITIONS = """- not-sarcasm: no sarcasm in the caption or the image, and none when they are combined. The caption and image match; they may be funny, sad or emotional as long as they are not sarcastic.
-- text-sarcasm: only the caption is sarcastic (saying the opposite of what is meant, exaggeration, satire). The image is neutral or merely illustrates it, and combining them adds no new layer of sarcasm.
-- image-sarcasm: only the image is sarcastic (text inside the image such as a meme or quote, a facial expression, an ironic situation). The caption is neutral or merely describes the image, and combining them adds no new layer of sarcasm.
-- multi-sarcasm: both the caption and the image are sarcastic (even if one is only mildly so), OR combining them creates sarcasm because they contradict each other, even if each looks neutral alone."""
+# Định nghĩa chính thức (docs/annotation_guideline.md, nguyên văn slide 2-3) và quy tắc suy ra từ dữ liệu
+# (docs/annotation_guideline_full.md mục 1, 3-8).
+LABEL_DEFINITIONS = """Official definition of the dataset authors:
+- Sarcasm is any sample that: employs irony by saying the opposite of what is meant, especially to mock or deride; contains a mismatch between the text and the image that suggests sarcasm through contradiction or exaggeration; uses hyperbole to overstate or understate reality in a way that is clearly not meant to be taken literally; incorporates sarcastic hashtags, emojis, or punctuation, which are commonly used to convey sarcasm online.
+- Not sarcasm is any sample that: conveys sentiments or statements that are straightforward and meant to be taken at face value; aligns directly with the image, supporting the literal interpretation of the text; does NOT contain linguistic or visual cues typically associated with sarcasm.
 
-# Mẫu thật trong train (ngoài pilot_dev, pilot_eval), giữ nguyên caption và OCR kể cả lỗi của chúng; phần Output
-# viết tay theo nhãn gốc. Các mẫu này không được đưa vào sinh reasoning (DATASET_EXAMPLE_IDS).
-DATASET_EXAMPLE_IDS = {"573", "7701", "1795", "424"}
-DATASET_EXAMPLES = r"""Caption: "Đang hát thì mất nhạc, Sếp Tùng nói \"kệ nhạc luôn\" :))\nClip dưới cmt 👇"
-OCR: "ĐANG TRÌNH DIỄN THÌ GẶP LỖI ÂM THANH\nMẤT NHẠC: SƠN TÙNG TỰ TIN KHOE GIỌNG\nHÁT LIVE ?KỆ NHẠC LUÔN\""
-Output: {"text_alone": {"sarcastic": false, "reason": "Caption thuật lại việc mất nhạc và lời của ca sĩ, không nói ngược hay châm biếm."}, "image_alone": {"sarcastic": false, "reason": "Ảnh và tiêu đề đưa tin Sơn Tùng vẫn hát live khi mất nhạc, mang tính thông tin."}, "combined": {"sarcastic": false, "reason": "Caption và ảnh kể cùng một sự việc, khớp nhau."}, "is_sarcastic": false, "label": "not-sarcasm"}
+How the dataset is actually labelled:
+- not-sarcasm (about 56% of posts): nothing and no one is mocked. This includes news, announcements, long articles (even sad or ironic events that are only reported), ads and promotions written in a fun tone, clickbait or exaggerated headlines, friendly teasing, self-deprecating memes and jokes without a target. Funny is NOT the same as sarcastic.
+- text-sarcasm (rare, under 1%): the CAPTION is the one being sarcastic (saying the opposite, ironic praise, mocking wordplay, ironic quotes, often with :)) =)) or 🙃), and the image is neutral (a news card, a photo, a product, a screenshot of someone's statement) that only shows what the caption mocks.
+- image-sarcasm (about 4%): the IMAGE is a complete joke with its own punchline (meme with text, comic, chat or comment screenshot), and the caption adds nothing sarcastic of its own: only emoji, "Tôi:", "Ủa", a short reaction, a line of dialogue, a series title, a page signature, or neutral information.
+- multi-sarcasm (about 39%): (A) the image is a joke AND the caption adds its own sarcastic idea (ironic praise, continuing the joke, playing a character, a mocking conclusion, wordplay); or (B) the caption invents a story, plays a role or says the opposite of what a neutral image shows, so the irony comes from the gap between them.
 
-Caption: "Còn đẻ là còn view :))))"
-OCR: "TOP NHỮNG BÀI HÁT LÀM MỘT LẦN\n\"HƯỞNG CẢ ĐỜI\" TRÊN YOUTUBE"
-Output: {"text_alone": {"sarcastic": true, "reason": "\"Còn đẻ là còn view\" châm biếm việc các bài hát thiếu nhi kiếm view mãi nhờ trẻ em mới sinh."}, "image_alone": {"sarcastic": false, "reason": "Ảnh ghép 4 MV với tiêu đề liệt kê các bài hát, chủ yếu cung cấp thông tin."}, "combined": {"sarcastic": false, "reason": "Ảnh chỉ minh hoạ chủ đề, không tạo thêm tầng nghĩa mỉa mai."}, "is_sarcastic": true, "label": "text-sarcasm"}
+Rules:
+- Text inside the image (memes, screenshots, printed headlines) belongs to the IMAGE.
+- Ignore page signatures and source tags such as "-kem", "- Elsa", "#interpool", "#WMO", "#VOZ_F33", "trollxe"; they carry no meaning.
+- Sarcasm needs a target being mocked (a person, a group, a product, an event) or a meaning said backwards. Reporting an ironic event in a neutral way is not sarcasm.
+- When unsure between text-sarcasm and multi-sarcasm, prefer multi-sarcasm: it is about 55 times more common."""
 
-Caption: "tại sao? tại saooo???"
-OCR: "NHÌN TAO CÀ KHỊA\nVỎ MÍT KHÔNG?\nTÔI BỊ"
-Output: {"text_alone": {"sarcastic": false, "reason": "\"tại sao? tại saooo???\" chỉ là câu cảm thán, không mỉa mai."}, "image_alone": {"sarcastic": true, "reason": "Truyện tranh: con chim định cà khịa con rắn nhưng cuối cùng tự thua, phải quỳ vỏ mít với biển \"TÔI BỊ NGU\", một tình huống trớ trêu."}, "combined": {"sarcastic": false, "reason": "Caption không thêm thái độ mỉa mai nào, ý mỉa mai nằm trọn trong truyện tranh."}, "is_sarcastic": true, "label": "image-sarcasm"}
+# Mẫu thật trong train (docs/annotation_guideline_full.md), không thuộc pilot_eval, natural_dev; phần Output viết tay
+# theo nhãn gốc. Không có ảnh đính kèm nên mỗi ví dụ mô tả ảnh bằng chữ. Các mẫu này không được đưa vào sinh
+# reasoning (DATASET_EXAMPLE_IDS); giữ cả mẫu ví dụ của v5-v8 để các lần chạy cũ và mới cùng tập mẫu.
+DATASET_EXAMPLE_IDS = {"573", "7701", "1795", "424", "8262", "2255", "4329", "4117", "3984", "9459", "8562"}
+DATASET_EXAMPLES = r"""Caption: "🤡 BILLIE EILISH ADD HẾT 113M FOLLOWERS VÀO CLOSE FRIEND - MỞ MẮT DẬY THẤY THÀNH BEST FRIEND LÚC NÀO KHÔNG HAY"
+Image: two screenshots of Billie Eilish's Instagram profile (113M followers), before and after a green "close friend" ring appears.
+Output: {"text_alone": {"sarcastic": false, "reason": "Tiêu đề giật tít, emoji 🤡 chỉ để gây chú ý, không chế giễu ai."}, "image_alone": {"sarcastic": false, "reason": "Hai ảnh chụp trang cá nhân minh hoạ đúng tin."}, "combined": {"sarcastic": false, "reason": "Caption và ảnh cùng đưa một tin vui về người nổi tiếng."}, "is_sarcastic": false, "label": "not-sarcasm"}
 
-Caption: "Thế là thành công rồi đấy, nổi tiếng rồi đấy"
-OCR: "TIKTOKER ĐI REVIEW QUÁN SÀ BÌ CHƯỞNG:\nCHÊ BAI ĐỦ ĐƯỜNG RỒI HÔM SAU LÊN XIN\nLỖI ĐỂ NỔI TIẾNG NHƯ HÀ LINH"
-Output: {"text_alone": {"sarcastic": true, "reason": "\"Thế là thành công rồi đấy, nổi tiếng rồi đấy\" là lời khen ngược, ý chê việc nổi tiếng theo cách này."}, "image_alone": {"sarcastic": true, "reason": "Tiêu đề \"chê bai đủ đường rồi hôm sau lên xin lỗi để nổi tiếng\" cùng ảnh chắp tay xin lỗi châm biếm chiêu trò của tiktoker."}, "combined": {"sarcastic": true, "reason": "Lời khen ở caption đặt cạnh chiêu trò trong ảnh làm ý mỉa mai rõ hơn."}, "is_sarcastic": true, "label": "multi-sarcasm"}"""
+Caption: "HƯỚNG DẪN CH.ỐT VARIO MỘT TRĂM SÁU CHỤC. Hơn cả một chiếc xe, VARIO là Sonic của tay ga, là Dream của tuổi trẻ, là Winner của tình trường!"
+Image: a cartoon salesman showing a scooter, text "Mời anh đứng thẳng nghiêm túc chỉnh tề - OK. Giờ là 1 phút mặc niệm dành cho showroom ngoài!", logo trollxe.
+Output: {"text_alone": {"sarcastic": false, "reason": "Caption là quảng cáo xe giọng vui, khen thật chứ không nói ngược."}, "image_alone": {"sarcastic": false, "reason": "Meme quảng cáo đùa vui, không có mục tiêu bị chế giễu rõ ràng."}, "combined": {"sarcastic": false, "reason": "Cả hai cùng quảng bá chiếc xe, hài hước nhưng không châm biếm."}, "is_sarcastic": false, "label": "not-sarcasm"}
+
+Caption: "Thôi sếp nói gì cũng đúng, lười cãi nữa rồi"
+Image: only the number "-57.62%" in red (an investment account in loss).
+Output: {"text_alone": {"sarcastic": true, "reason": "\"Sếp nói gì cũng đúng\" là nói ngược, ý chê lời khuyên của sếp đã làm lỗ."}, "image_alone": {"sarcastic": false, "reason": "Ảnh chỉ là con số lỗ -57.62%, không tự châm biếm."}, "combined": {"sarcastic": false, "reason": "Ảnh chỉ cho biết bối cảnh, lời mỉa mai nằm ở caption."}, "is_sarcastic": true, "label": "text-sarcasm"}
+
+Caption: "😭"
+Image: chat screenshot. A blurred "Xem ai thích bạn" panel, someone asks "Đây là gì zạ, mạng lag đúng hong", the reply: "K, là nghèo đấy".
+Output: {"text_alone": {"sarcastic": false, "reason": "Caption chỉ là emoji phản ứng."}, "image_alone": {"sarcastic": true, "reason": "Câu trả lời \"là nghèo đấy\" chế giễu người không trả tiền nên ảnh bị làm mờ."}, "combined": {"sarcastic": false, "reason": "Emoji không thêm ý mỉa mai riêng, câu chốt nằm trong ảnh."}, "is_sarcastic": true, "label": "image-sarcasm"}
+
+Caption: "Tôi:"
+Image: Korean drama stills with subtitles: "Cái khóa đâu? Lấy khóa ra đây." "Để làm gì ạ?" "Phải khóa mồm thằng này lại thôi."
+Output: {"text_alone": {"sarcastic": false, "reason": "\"Tôi:\" chỉ mở đầu cho ảnh, không có ý gì riêng."}, "image_alone": {"sarcastic": true, "reason": "Câu chốt \"phải khoá mồm thằng này lại\" chế giễu người nói nhiều."}, "combined": {"sarcastic": false, "reason": "Caption chỉ gắn trò đùa trong ảnh vào người đăng, không thêm tầng nghĩa mới."}, "is_sarcastic": true, "label": "image-sarcasm"}
+
+Caption: "Thôi để 31/6 rồi đá lại =))"
+Image: football meme of De Ligt being interviewed: "Trọng tài biên đã nói với tôi rằng: xin lỗi, tôi đã phạm sai lầm", "Thật đáng xấu hổ".
+Output: {"text_alone": {"sarcastic": true, "reason": "Hẹn \"31/6\", ngày không tồn tại, là cách nói ngược rằng sẽ không bao giờ đá lại."}, "image_alone": {"sarcastic": true, "reason": "Lời xin lỗi muộn màng của trọng tài được dựng lại để chế giễu."}, "combined": {"sarcastic": true, "reason": "Caption đùa tiếp câu chuyện trong ảnh, thêm một tầng mỉa mai của riêng nó."}, "is_sarcastic": true, "label": "multi-sarcasm"}
+
+Caption: "THẢ CÁ ÔNG CÔNG ÔNG TÁO TẠI XỨ SỞ HOA ANH ĐÀO 😍 Một bức ảnh quá nhiều cảm xúc..."
+Image: a real photo of thousands of dead fish washed up on a beach in Japan.
+Output: {"text_alone": {"sarcastic": true, "reason": "Gọi một sự việc buồn là \"thả cá ông Công ông Táo\" kèm 😍 là nói ngược."}, "image_alone": {"sarcastic": false, "reason": "Ảnh thật về cá chết hàng loạt, tự nó không châm biếm."}, "combined": {"sarcastic": true, "reason": "Ý mỉa mai đến từ khoảng cách giữa lời vui vẻ của caption và cảnh cá chết trong ảnh."}, "is_sarcastic": true, "label": "multi-sarcasm"}"""
 
 PROMPT_TEMPLATE = """You are an expert in sarcasm on Vietnamese social media. You are given a post with an image (attached) and a Vietnamese caption.
 
 Caption: \"\"\"{caption}\"\"\"
 Text read from the image (OCR, may be wrong or incomplete): \"\"\"{ocr}\"\"\"
 
-Label definitions:
 {definitions}
 
-Examples from the dataset, with the expected output:
+Examples from the dataset, with the expected output (their images are described in words):
 {dataset_examples}
 {label_hint}
-Think hierarchically, from evidence to decision, one level at a time. Finish each level before moving to the next.
-
-Level 1 - Evidence from each part on its own:
-  1a. Caption only, ignoring the image: is it sarcastic? Quote the specific words that show it.
-  1b. Image only (including any text in it), ignoring the caption: describe what you see, then decide whether the text, facial expressions or situation are satirical or ironic.
-Level 2 - Interaction: put the caption and image together. Do they contradict each other, or does a new sarcastic meaning appear that neither has alone?
-Level 3 - Is the post sarcastic at all? It is sarcastic if any answer in Levels 1-2 is yes. If all are no, the label is not-sarcasm and you stop here.
-Level 4 - Where is the sarcasm? Only if Level 3 is yes:
-  - caption only, with no interaction -> text-sarcasm
-  - both the caption and the image, or created by the interaction -> multi-sarcasm
-  - image only -> image-sarcasm, but only if the caption is empty, purely factual, or shows no attitude of its own. If the caption jokes, mocks, plays along or adds an attitude to a sarcastic image, the label is multi-sarcasm.
-
-Calibration: in this dataset multi-sarcasm is far more common than image-sarcasm and text-sarcasm, which are rare.
-A meme, comic or joke is not automatically sarcastic. Being funny, or reporting something bad, is not enough: there must be irony, mockery or saying the opposite of what is meant. Otherwise the label is not-sarcasm.
+Decide step by step:
+Step 1 - Caption only, ignoring the image: does it mock someone or say the opposite of what it means? Quote the words. A reaction, emoji, signature, dialogue line or information is not sarcastic.
+Step 2 - Image only (including any text in it), ignoring the caption: describe what you see, then decide whether it is a joke with a target being mocked.
+Step 3 - Together: does the caption add its own sarcastic idea to the image, or contradict what a neutral image shows?
+Step 4 - Label: nothing mocked -> not-sarcasm; punchline only in the image and the caption adds nothing -> image-sarcasm; caption sarcastic and the image only shows its subject -> text-sarcasm; both, or the irony comes from combining them -> multi-sarcasm.
 
 Write every "reason" in Vietnamese. Answer with exactly ONE JSON object and nothing else, filling the fields in this order:
 {{"text_alone": {{"sarcastic": true or false, "reason": "..."}}, "image_alone": {{"sarcastic": true or false, "reason": "..."}}, "combined": {{"sarcastic": true or false, "reason": "..."}}, "is_sarcastic": true or false, "label": "not-sarcasm | text-sarcasm | image-sarcasm | multi-sarcasm"}}"""
 
 LABEL_HINT = """
-The correct label of this post is: {label}. Explain why the post has this label, following the levels below, and conclude with exactly that label.
+The correct label of this post is: {label}. Explain why the post has this label, following the steps below, and conclude with exactly that label.
 """
 
 MAX_CAPTION_CHARS = 1500  # caption tin tức dài tới ~850 từ; cắt để prompt không quá dài
 
 
 def build_prompt(caption, ocr="", label=None):
-    """Prompt CoT phân cấp 4 mức (tiếng Anh, reason vẫn viết tiếng Việt để PhoBERT mã hoá). `label` != None: rationalization (đưa nhãn đúng, yêu cầu giải thích)."""
+    """Prompt CoT 4 bước (tiếng Anh, reason vẫn viết tiếng Việt để PhoBERT mã hoá). `label` != None: rationalization (đưa nhãn đúng, yêu cầu giải thích)."""
     caption = (caption or "").strip()
     if len(caption) > MAX_CAPTION_CHARS:
         caption = caption[:MAX_CAPTION_CHARS] + " ..."

@@ -2,7 +2,8 @@
 
     python scripts/knn_eval.py --runs distill_flat_a_s42 distill_flat_a_s1 distill_flat_a_s2
 
-Theo thiết kế, model và kNN cùng hiệu chỉnh prior theo val. Ghi <output_dir>/knn/<run>/knn.json và grid.csv. `best` là
+Theo thiết kế, model và kNN cùng hiệu chỉnh prior theo val. --no-prior: không hiệu chỉnh ở cả hai, mốc là model gốc
+(ghi knn_noprior.json, grid_noprior.csv). Ghi <output_dir>/knn/<run>/knn.json và grid.csv. `best` là
 điểm dò trên chính val nên lạc quan; `cv` là ước lượng ngoài mẫu bằng kiểm định chéo trong val. Không đụng private test."""
 import argparse
 import json
@@ -24,7 +25,7 @@ from vimmsd.utils.config import load_config
 GRID = {"k": [5, 10, 20, 50], "tau": [0.05, 0.1, 0.2], "lambda": [0.5, 0.7, 0.9, 1.0]}
 
 
-def evaluate_run(run_dir):
+def evaluate_run(run_dir, prior=True):
     cfg, model, collator, device, use_amp = load_trained_run(run_dir)
     needs_text, needs_image = MODALITY_NEEDS[cfg.model.modality]
     datasets = build_datasets(cfg, needs_text, needs_image, splits=("train", "val"))
@@ -43,32 +44,37 @@ def evaluate_run(run_dir):
     train_counts, val_counts = counts("train"), counts("val")
     memory = collect_outputs(model, loader("train"), device, use_amp)
     uncorrected = collect_outputs(model, loader("val"), device, use_amp)
-    model.set_prior_shift(compute_prior_shift(model.head_type, train_counts, val_counts, labels))
-    val = collect_outputs(model, loader("val"), device, use_amp)
-    model.set_prior_shift(None)
+    val = uncorrected
+    if prior:
+        model.set_prior_shift(compute_prior_shift(model.head_type, train_counts, val_counts, labels))
+        val = collect_outputs(model, loader("val"), device, use_amp)
+        model.set_prior_shift(None)
+    target_counts = val_counts if prior else train_counts  # tỉ lệ prior = 1: láng giềng giữ phân bố của train
 
     sims, idx = nearest_neighbors(val["z"], memory["z"], max(GRID["k"]))
     neighbor_labels = memory["labels"][idx]
-    args = (val["labels"], val["probs"], sims, neighbor_labels, train_counts, val_counts, labels, GRID, metric, exclude)
+    args = (val["labels"], val["probs"], sims, neighbor_labels, train_counts, target_counts, labels, GRID, metric, exclude)
     rows = grid_search(*args)
     unc = grid_search(val["labels"], uncorrected["probs"], sims, neighbor_labels, train_counts, val_counts, labels,
                       {"k": [], "tau": [], "lambda": []}, metric, exclude)[0]
-    return {"run": Path(run_dir).name, "metric": metric, "exclude": list(exclude), "uncorrected": unc, "no_retrieval": rows[0],
+    return {"run": Path(run_dir).name, "prior_correction": prior, "metric": metric, "exclude": list(exclude), "uncorrected": unc, "no_retrieval": rows[0],
             "best": _best(rows), "cv": grid_search_cv(*args), "similarity": similarity_stats(sims, neighbor_labels, val["labels"])}, rows
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--runs", nargs="+", required=True)
+    parser.add_argument("--no-prior", action="store_true", help="không hiệu chỉnh prior ở model và kNN")
     args = parser.parse_args()
+    suffix = "_noprior" if args.no_prior else ""
     root = Path(load_config("configs/base.yaml").paths.output_dir)
     gains = []
     for name in args.runs:
-        result, rows = evaluate_run(root / name)
+        result, rows = evaluate_run(root / name, prior=not args.no_prior)
         out = root / "knn" / name
         out.mkdir(parents=True, exist_ok=True)
-        (out / "knn.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
-        pd.DataFrame([{k: v for k, v in r.items() if k != "f1"} for r in rows]).to_csv(out / "grid.csv", index=False)
+        (out / f"knn{suffix}.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+        pd.DataFrame([{k: v for k, v in r.items() if k != "f1"} for r in rows]).to_csv(out / f"grid{suffix}.csv", index=False)
         print(f"{name}: chưa prior {result['uncorrected']['score']:.4f} | prior {result['no_retrieval']['score']:.4f} | "
               f"kNN {result['best']['score']:.4f} (k={result['best']['k']}, τ={result['best']['tau']}, λ={result['best']['lambda']}) | "
               f"CV {result['cv']['score']:.4f} | sim {result['similarity']['top1_mean']:.3f}", flush=True)

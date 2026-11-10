@@ -25,9 +25,17 @@ e1: |
 
   **Không giữ E1.** So với λ = 1, kiểm định chéo: `distill_flat_a` -0,6 điểm, `distill_hier_b` +1,7, `hier_cascade` +0,6. Hai hàng sau vượt mức lệch giữa các seed, nhưng cả ba hàng vẫn thấp hơn cùng model chưa hiệu chỉnh prior khoảng 2,3–3,0 điểm (0,491/0,488/0,484 so với 0,521/0,512/0,507), và phần tăng chủ yếu bù lại mức giảm do hiệu chỉnh prior. F1 `image-sarcasm` không cải thiện.
 
+  **Bản không hiệu chỉnh prior (`--no-prior`), so trực tiếp với model gốc:** kiểm định chéo thấp hơn model gốc ở cả 3 hàng: `distill_flat_a` -1,1 điểm, `distill_hier_b` -0,05, `hier_cascade` -0,7. Điểm dò trên chính val có tăng 0,3–1,5 điểm nhưng mất khi chọn tham số ngoài mẫu, tức là phần tăng đó là do dò quá khớp với val. F1 `image-sarcasm` không tăng ở seed nào. Kết luận không giữ E1 vẫn đúng với cả hai cách.
+
   Giả định "meme lặp template" không được ủng hộ: chỉ 0,1–3,5% mẫu val có láng giềng gần nhất với sim ≥ 0,9, và nhãn láng giềng gần nhất chỉ đúng 60–64%, thấp hơn luôn đoán `multi-sarcasm` (66,7%).
 source_tags_retrain: |
   Train lại và đánh giá khi caption không có thẻ nguồn, hashtag và chữ ký (`distill_flat_a_notags`, 3 seed): macro-F1 bỏ `text-sarcasm` giảm từ 0,521 xuống 0,501 (cả 3 seed đều giảm, 1,4–3,4 điểm), accuracy không đổi (0,758 và 0,759). F1 `multi-sarcasm` gần như giữ nguyên; `not-sarcasm` giảm từ 0,657 xuống 0,635; `image-sarcasm` từ 0,077 xuống 0,036, chỉ có 28 mẫu val nên rất nhiễu. Chênh lệch khoảng bằng 1 độ lệch chuẩn giữa các seed. Thẻ có đóng góp nhưng không phải nguồn tín hiệu chính. Logo và chữ trong ảnh vẫn còn trong OCR nên nguồn chưa bị loại bỏ hoàn toàn.
+b2: |
+  1 seed (42), macro-F1 bỏ `text-sarcasm` trên val. Model đa phương thức của B2 cùng cấu hình và seed với `distill_flat_a_s42` và cho đúng cùng điểm (0,507), nên các con số so được trực tiếp với seed đó, không phải với trung bình 3 seed (0,521).
+
+  **Không giữ B2.** Stacking 0,504 (kiểm định chéo 0,504), trung bình xác suất 0,501, đều không hơn model đa phương thức một mình (0,507). Classifier gộp gần như chỉ dựa vào model đa phương thức. F1 `image-sarcasm` bằng 0 ở cả 3 model riêng và ở bản gộp: model chỉ-ảnh cũng không học được lớp này.
+
+  **Text-only cho D1:** model chỉ caption đạt 0,504, gần bằng model đa phương thức (0,507) và hơn model chỉ-ảnh (0,467). Ảnh, OCR và mô tả gần như không thêm gì vào điểm tổng, khớp với kết quả đổi ảnh của D1. Cần nhiều seed hơn để tách được chênh lệch 0,3 điểm này khỏi nhiễu.
 stage1: |
   **Mức độ tin cậy của các lần chạy.** Prompt v1–v5 chạy Qwen2.5-VL-7B lượng tử 4-bit do GPU 12 GB không chứa được bản bf16. `pilot_eval` chưa dùng. Val đã dùng hai lần: v6, rồi v8. v7 được viết sau khi xem kết quả v6 trên val, nên kết quả v8 trên val có thể hơi lạc quan. `natural_dev` được thêm vì `pilot_dev` cân bằng lớp không phản ánh phân bố thật. Từ v5 prompt có 4 ví dụ cố định lấy từ train, nên các lần chạy này không còn là zero-shot hoàn toàn dù tên thư mục có `zero_shot`.
 
@@ -39,10 +47,15 @@ stage1: |
 
   **Bỏ luật "khi phân vân thì chọn multi" (v8).** Trên `natural_dev`, phân bố dự đoán gần như không đổi so với v7: accuracy 56,8% so với 58,8%, macro-F1 0,326 so với 0,346. Câu nói `multi-sarcasm` phổ biến hơn vẫn được giữ. Trên val, 196/942 mẫu `multi-sarcasm` bị đoán thành `image-sarcasm`; accuracy 58,9%, thấp hơn luôn đoán `multi-sarcasm` (66,7%).
 
+  **Prompt v9 (định nghĩa chính thức, quy tắc suy ra từ dữ liệu, 7 ví dụ có mô tả ảnh) với Qwen3-VL-8B 4-bit trên `natural_dev`:** accuracy 50,6% (v7: 46,8%), macro-F1 bỏ `text-sarcasm` 0,308 (v7: 0,272), parse lỗi 0,2%. Vẫn đoán `multi-sarcasm` cho 446/499 mẫu, 230/280 mẫu `not-sarcasm` bị đoán `multi`, và `image-sarcasm` 0/15. Vẫn thấp hơn luôn đoán `not-sarcasm` (56%) và thấp xa Flash Lite v8 (0,435). Cờ châm biếm có giảm (caption: 87% xuống 75% trên mẫu `not-sarcasm`) nhưng vẫn bật cho phần lớn bài không châm biếm. Prompt tốt hơn không khắc phục được thiên lệch của model này.
+
   **Chi phí (ước tính, giá lấy từ nguồn tổng hợp, chưa đối chiếu giá chính thức).** Flash Lite khoảng 0,0014 USD mỗi lần sinh: khoảng 10 USD cho lô 1–3 với k = 1, khoảng 30 USD với k theo kế hoạch. Gemini Pro khoảng 35 USD cho val và khoảng 500 USD cho các lô.
 limitations: |
+  - Hướng dẫn gán nhãn chính thức (`docs/annotation_guideline.md`) chỉ định nghĩa có/không châm biếm; ranh giới giữa `text`, `image` và `multi` chỉ có 9 ví dụ. 5 ví dụ có trong bộ dữ liệu, 3 trong số đó mang nhãn khác với slide (train 8517, train 493, private test 545).
   - Val chỉ có 1 mẫu `text-sarcasm` và 28 mẫu `image-sarcasm`, nên F1 các lớp này rất nhạy với vài mẫu.
 stage2: |
   **Thử giải thích khi đã cho nhãn đúng (Qwen3-VL-8B 4-bit, v8, 100 mẫu train, ngoài `pilot_eval`), 8 giây/mẫu, chưa sinh cả tập.** 98/100 đọc được; 92/100 kết luận đúng nhãn đã cho, riêng `text-sarcasm` 16/20. Cờ text/ảnh khớp nhãn ở 95/100 mẫu, tức gần như chép lại nhãn gốc, nên cột (c) sẽ gần trùng cột (b).
 
   Đọc thử 13 mẫu, đối chiếu ảnh ở 4 mẫu (chưa phải chấm rubric): mô tả bề mặt và lý do cho mẫu `not-sarcasm` thường đọc được; phần giải thích ý mỉa mai yếu. Lỗi gặp: nhận nhầm ảnh miệng rùa biển thành cá mập (1244); bịa nghĩa "số 13 xui xẻo" trong khi câu đùa là chồng được nhận lại máy cũ của vợ (4032); bỏ sót chơi chữ Nissan/Mitsubishi trong meme (2559); lý do mâu thuẫn với nhãn được giao (2259, 3832). File chấm: `outputs/cot_distill/label_given_review.csv`.
+
+  **Quyết định (2026-11-03): dừng M1, M2, M3.** Teacher miễn phí (Qwen) không viết được lý do đáng tin, teacher trả phí không còn ngân sách. Phương án người viết giải thích cũng bị loại: nhóm không suy ra được quy tắc gán nhãn của bộ dữ liệu, bộ dữ liệu không công bố hướng dẫn gán nhãn, và `docs/labeling_guidelines.md` được dựng từ vài mẫu nên không khái quát được. Lý do viết cho nhãn mà người viết không hiểu sẽ chỉ là hợp lý hoá. Sheet đã tạo (`outputs/human_explanations/`) không được dùng.

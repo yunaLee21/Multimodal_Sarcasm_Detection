@@ -198,10 +198,11 @@ def source_tag_section(output_dir):
         table(["Run", "Thẻ", "Số mẫu val", "Nhãn thật", "Dự đoán trước", "Dự đoán sau", "Accuracy trước", "Accuracy sau"], tag_rows)])
 
 
-def knn_section(output_dir):
-    """Kết quả scripts/knn_eval.py, nếu đã chạy. Trả về (bảng baseline, bảng khác): cột (a)/(b) và phần còn lại."""
+def knn_section(output_dir, file="knn.json"):
+    """Kết quả scripts/knn_eval.py, nếu đã chạy. Trả về (bảng baseline, bảng khác): cột (a)/(b) và phần còn lại.
+    file="knn_noprior.json": bản chạy với --no-prior."""
     root = Path(output_dir) / "knn"
-    results = {p.name: m for p in sorted(root.iterdir()) if (m := read_json(p / "knn.json"))} if root.exists() else {}
+    results = {p.name: m for p in sorted(root.iterdir()) if (m := read_json(p / file))} if root.exists() else {}
     def render(items):
         if not items:
             return ""
@@ -293,6 +294,7 @@ def build_report(output_dir, design, plan, notes=None, kaggle=(), image_meta=Non
     diag_base = {k: v for k, v in diag.items() if RUN_NAME_RE.match(k) and RUN_NAME_RE.match(k)["group"] in STAGE0_GROUPS}
     diag_other = {k: v for k, v in diag.items() if k not in diag_base}
     knn_base, knn_other = knn_section(output_dir)
+    knn_noprior, _ = knn_section(output_dir, "knn_noprior.json")
 
     gates = [
         ["G0", "Phân cấp mềm không kém phẳng quá 1 điểm macro-F1 trên val", g0_result(groups), gate("G0")],
@@ -335,7 +337,9 @@ def build_report(output_dir, design, plan, notes=None, kaggle=(), image_meta=Non
                 section("### 5.6. Kiểm tra thẻ nguồn trong caption", source_tag_section(output_dir), note("source_tags"),
                         group_table(groups, ("distill_flat_a", "distill_flat_a_notags"), "val")
                         if "distill_flat_a_notags" in groups else "", note("source_tags_retrain")),
-                section("### 5.7. E1: kNN retrieval", knn_base, note("e1"))),
+                section("### 5.7. E1: kNN retrieval", knn_base,
+                        "Không hiệu chỉnh prior ở cả model và kNN (`--no-prior`); cột \"Prior, không kNN\" khi đó là model gốc:"
+                        if knn_noprior else "", knn_noprior, note("e1"))),
         section("## 6. Giai đoạn 1: thử teacher", *teacher_sections,
                 section("### Đối chiếu với mốc G1 trên val",
                         table(["Lần chạy", "F1 `image`", "Mốc", "F1 `multi`", "Mốc", "Parse lỗi", "G1"], g1) if g1 else ""),

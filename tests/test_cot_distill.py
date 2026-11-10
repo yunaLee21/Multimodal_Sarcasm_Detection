@@ -180,7 +180,7 @@ def test_parse_teacher_output_variants():
 def test_build_prompt_label_hint_and_truncation():
     p = R.build_prompt("cap " * 1000, "")
     assert "(none)" in p and "The correct label" not in p and len(p) < 11000
-    assert "image description" not in p.lower() and all(l in R.DATASET_EXAMPLES for l in R.LABELS)
+    assert all(l in R.DATASET_EXAMPLES for l in R.LABELS)
     assert "The correct label of this post is: image-sarcasm" in R.build_prompt("cap", "chữ", label="image-sarcasm")
 
 
@@ -374,7 +374,8 @@ def test_teacher_4bit_only_changes_model_kwargs(monkeypatch, load_in_4bit):
 
 
 def test_prompt_does_not_push_towards_one_label():
-    assert "choose multi-sarcasm" not in R.build_prompt("c")
+    p = R.build_prompt("c")
+    assert "between image-sarcasm and multi-sarcasm" not in p and "Official definition" in p
 
 
 def test_gemini_row_matches_raw_format(tmp_path):
