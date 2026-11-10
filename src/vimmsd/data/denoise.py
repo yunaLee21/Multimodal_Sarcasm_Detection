@@ -28,7 +28,8 @@ DEFAULTS = {
     "cv_folds": 5,
     "lr_C": 1.0,
     "lr_max_iter": 3000,
-    "min_oof_macro_f1": 0.40,           # thấp hơn thì xác suất quá yếu: không áp luật drop_mislabel
+    "min_oof_macro_f1": 0.40,
+    "oof_models": ["text", "image", "multi"],  # chỉ dùng với --oof-probs: trung bình xác suất của các model này           # thấp hơn thì xác suất quá yếu: không áp luật drop_mislabel
     "knn_k": 10,
     "knn_agree_max": 0.2,
     "droppable_labels": ["not-sarcasm", "multi-sarcasm"],

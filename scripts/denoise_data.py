@@ -3,6 +3,8 @@
     VIMMSD_ENV=server python scripts/denoise_data.py --config configs/base.yaml --out-dir /data/Phat/vimmsd-clear
     ... --override denoise.knn_agree_max=0.1     # tham số khác xem denoise.DEFAULTS, ghi hết vào manifest.json
     ... --drop-test-overlap                      # bỏ khỏi train mẫu trùng chính xác với public/private test (mặc định chỉ gắn cờ)
+    ... --oof-probs <out>/noise_report/oof_b2.npz --override denoise.oof_models=[multi] \
+        --no-write --report-dir <out>/noise_report_oof_multi   # bước 3 dùng xác suất out-of-fold của model đã train
 
 Nguồn là paths.data_dir của config (chỉ đọc). Chỉ lọc train; public/private test và file *-ref.json chép nguyên.
 Bước 1: trùng chính xác (md5 ảnh + caption chuẩn hoá). Bước 2: gần trùng (pHash và CLIP cho ảnh, e5 cho caption, cần cả
@@ -41,6 +43,11 @@ def parse_args():
     parser.add_argument("--device", default=None, help="mặc định cuda nếu có")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--no-write", action="store_true", help="chỉ ghi noise_report, không dựng raw/")
+    parser.add_argument("--report-dir", default=None,
+                        help="mặc định <out-dir>/noise_report; khác mặc định thì manifest.json ghi vào đây")
+    parser.add_argument("--oof-probs", default=None,
+                        help="npz của scripts/export_oof_probs.py: bước 3 dùng trung bình probs_<denoise.oof_models> "
+                             "thay cho logistic regression")
     return parser.parse_args()
 
 
@@ -113,20 +120,35 @@ def compute_embeddings(emb_dir, ids, paths, captions, p, device, batch_size):
 
 # ---------------------------------------------------------------- bước 3
 
-def mislabel_signals(feats, y, group_codes, n_labels, p):
+def load_oof_probs(path, ids, labels, models):
+    """Trung bình xác suất out-of-fold của `models` trong npz (scripts/export_oof_probs.py), theo thứ tự `ids`."""
+    d = np.load(path)
+    if list(d["label_names"]) != list(labels):
+        raise ValueError(f"{path}: thứ tự nhãn {list(d['label_names'])} khác config {labels}")
+    index = {str(s): n for n, s in enumerate(d["ids"])}
+    missing = [i for i in ids if i not in index]
+    if missing:
+        raise ValueError(f"{path} thiếu {len(missing)} id, vd {missing[:3]}")
+    rows = [index[i] for i in ids]
+    return np.mean([d[f"probs_{m}"][rows] for m in models], axis=0), json.loads(str(d["meta"]))
+
+
+def mislabel_signals(feats, y, group_codes, n_labels, p, probs=None):
+    """probs=None: xác suất out-of-fold từ logistic regression trên feats; có probs thì dùng luôn."""
     from cleanlab.filter import find_label_issues
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import f1_score
     from sklearn.model_selection import StratifiedGroupKFold
 
-    cv = StratifiedGroupKFold(n_splits=p["cv_folds"], shuffle=True, random_state=p["seed"])
-    probs = np.zeros((len(y), n_labels))
     fold_sizes = []
-    for train_idx, test_idx in cv.split(feats, y, group_codes):
-        clf = LogisticRegression(C=p["lr_C"], class_weight="balanced", max_iter=p["lr_max_iter"])
-        clf.fit(feats[train_idx], y[train_idx])
-        probs[np.ix_(test_idx, clf.classes_)] = clf.predict_proba(feats[test_idx])
-        fold_sizes.append({"n": int(len(test_idx)), "labels": np.bincount(y[test_idx], minlength=n_labels).tolist()})
+    if probs is None:
+        cv = StratifiedGroupKFold(n_splits=p["cv_folds"], shuffle=True, random_state=p["seed"])
+        probs = np.zeros((len(y), n_labels))
+        for train_idx, test_idx in cv.split(feats, y, group_codes):
+            clf = LogisticRegression(C=p["lr_C"], class_weight="balanced", max_iter=p["lr_max_iter"])
+            clf.fit(feats[train_idx], y[train_idx])
+            probs[np.ix_(test_idx, clf.classes_)] = clf.predict_proba(feats[test_idx])
+            fold_sizes.append({"n": int(len(test_idx)), "labels": np.bincount(y[test_idx], minlength=n_labels).tolist()})
     pred = probs.argmax(1)
     macro = float(f1_score(y, pred, average="macro"))
     per_class = f1_score(y, pred, average=None, labels=list(range(n_labels))).tolist()
@@ -258,9 +280,11 @@ def write_summary(path, df, labels, n_orig, clean_train, check, manifest):
         lines.append(f"| {lab} | {before[lab]} | {100 * before[lab] / n_orig:.1f} | {after[lab]} | "
                      f"{100 * after[lab] / len(clean_train):.1f} | {after[lab] - before[lab]:+d} |")
     s3 = manifest["step3"]
+    src = s3["probs_source"]
+    source = (f"model B2 {', '.join(src['models'])} đã train, `{Path(src['file']).name}`" if isinstance(src, dict) else
+              f"logistic regression trên CLIP ảnh ⊕ e5 caption, {manifest['params']['cv_folds']} fold StratifiedGroupKFold")
     lines += ["", "## Bước 3", "",
-              f"- Out-of-fold macro-F1 (logistic regression trên CLIP ảnh ⊕ e5 caption, {manifest['params']['cv_folds']} fold "
-              f"StratifiedGroupKFold): **{s3['oof_macro_f1']:.3f}**; F1 từng lớp: "
+              f"- Out-of-fold macro-F1 ({source}): **{s3['oof_macro_f1']:.3f}**; F1 từng lớp: "
               + ", ".join(f"{lab} {v:.3f}" for lab, v in zip(labels, s3["oof_per_class_f1"])) + ".",
               f"- Luật drop_mislabel {'được áp dụng' if s3['drop_rule_applied'] else '**không áp dụng** (macro-F1 dưới ngưỡng)'}"
               f" (ngưỡng macro-F1 {manifest['params']['min_oof_macro_f1']}). cleanlab gắn cờ {s3['cleanlab_issues']} mẫu; "
@@ -298,8 +322,12 @@ def main():
     src = Path(cfg.paths.data_dir).resolve()
     out = Path(args.out_dir).resolve()
     check_out_dir(src, out)
-    report_dir, emb_dir = out / "noise_report", out / "noise_report" / "embeddings"
+    report_dir = Path(args.report_dir).resolve() if args.report_dir else out / "noise_report"
+    emb_dir = out / "noise_report" / "embeddings"   # cache embedding dùng chung giữa các lần chạy
     emb_dir.mkdir(parents=True, exist_ok=True)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    if args.report_dir and not args.no_write:
+        raise SystemExit("--report-dir chỉ dùng với --no-write (bản sạch luôn đi kèm noise_report mặc định)")
     logger.info("nguồn %s -> %s", src, out)
 
     splits = {s: load_split(cfg, src, s) for s in ("train", "public_test", "private_test")}
@@ -412,7 +440,10 @@ def main():
     feats /= np.linalg.norm(feats, axis=1, keepdims=True)
     y = np.array([label2id[rows[i]["new_label"]] for i in kept])
     gcodes = pd.factorize(pd.Series([group_of[i] for i in kept]))[0]
-    sig = mislabel_signals(feats, y, gcodes, len(labels), p)
+    ext_probs, oof_meta = None, None
+    if args.oof_probs:
+        ext_probs, oof_meta = load_oof_probs(args.oof_probs, kept, labels, p["oof_models"])
+    sig = mislabel_signals(feats, y, gcodes, len(labels), p, ext_probs)
     logger.info("bước 3: OOF macro-F1 %.3f, per-class %s, cleanlab %d", sig["macro_f1"],
                 np.round(sig["per_class_f1"], 3).tolist(), int(sig["issues"].sum()))
     for n, i in enumerate(kept):
@@ -491,6 +522,8 @@ def main():
                   "near_groups": len(near_groups), "samples_in_near_groups": sum(map(len, near_groups)),
                   "actions_after_step2": dict(step2)},
         "step3": {"n_samples": len(kept), "oof_macro_f1": sig["macro_f1"],
+                  "probs_source": ({"file": args.oof_probs, "models": p["oof_models"], "meta": oof_meta}
+                                   if args.oof_probs else "logistic regression on CLIP image + e5 caption"),
                   "oof_per_class_f1": sig["per_class_f1"], "folds": sig["folds"],
                   "drop_rule_applied": bool(apply_drop), "cleanlab_issues": int(sig["issues"].sum()),
                   "drop_candidates": candidates3 if apply_drop else 0, "max_drop": max_drop, "capped": capped,
@@ -507,7 +540,8 @@ def main():
         manifest["verify"] = problems or "ok"
         if problems:
             logger.error("kiểm tra bản sạch lỗi: %s", problems)
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    manifest_path = report_dir / "manifest.json" if args.report_dir else out / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     write_summary(report_dir / "summary.md", df, labels, n_orig, clean_train, check, manifest)
     logger.info("train %d -> %d; %s", n_orig, len(clean_train), dict(Counter(df["action"])))
     if not args.no_write and manifest["verify"] != "ok":
