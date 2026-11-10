@@ -1,0 +1,19 @@
+# So sánh train trên ViMMSD gốc và bản đã lọc nhiễu (scripts/denoise_data.py), cùng val (public test) và private test.
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/denoise_compare.yaml --gpu-ids 0
+# data/server/* trỏ vào bản sạch (/data/Phat/vimmsd-clear); run *_orig trỏ data_dir/cache_dir về bản gốc bằng override.
+# Hai bản có public/private test và file *-ref.json giống từng byte, text cache cùng pipeline_key.
+name: denoise_compare
+seeds: [42, 1, 2]
+overrides: [train.num_workers=0]   # /dev/shm của máy này chỉ 64 MB
+evaluate: [val]
+runs:
+  - config: configs/text_only.yaml
+    name: text_only_orig
+    overrides: [paths.server.data_dir=/data/Phat/vimmsd-data, paths.server.cache_dir=/data/Phat/vimmsd_cache]
+  - config: configs/text_only.yaml
+    name: text_only_clean
+  - config: configs/image_only.yaml
+    name: image_only_orig
+    overrides: [paths.server.data_dir=/data/Phat/vimmsd-data, paths.server.cache_dir=/data/Phat/vimmsd_cache]
+  - config: configs/image_only.yaml
+    name: image_only_clean
