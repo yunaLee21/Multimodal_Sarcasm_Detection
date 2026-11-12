@@ -23,5 +23,6 @@ kaggle               # download data qua API (chỉ dùng local)
 wandb                # theo dõi run, chỉ dùng khi wandb.enabled=true
 cleanlab             # lọc nhãn nhiễu (scripts/denoise_data.py)
 imagehash            # pHash tìm ảnh gần trùng (scripts/denoise_data.py)
+sentencepiece        # tokenizer của vinai-translate (back-translation, scripts/augment_minority.py)
 flask                # web xem dữ liệu (scripts/serve_web.py)
 pytest

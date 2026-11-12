@@ -440,7 +440,30 @@ def load_all_records(cfg):
     elif fold.get("index") is not None:
         held_out = fold_of(splits["train"], fold.get("k", 5), fold.get("seed", 42))
         splits["train"] = [r for r in splits["train"] if held_out[r["id"]] != fold["index"]]
+    aug = cfg.data.get("augmentation") or {}
+    if aug.get("manifest"):
+        variants = [json.loads(line) for line in Path(aug["manifest"]).read_text(encoding="utf-8").splitlines() if line.strip()]
+        splits = apply_augmentation(splits, variants, label2id)
     return apply_caption_filter(splits, cfg.data.get("caption_filter"))
+
+
+def apply_augmentation(splits, variants, label2id):
+    """Thêm biến thể đã duyệt (augmentation_manifest.jsonl, scripts/augment_minority.py) vào train: chỉ biến thể có
+    mẫu gốc nằm trong phần train hiện tại (sau khi tách fold), nên không biến thể nào rơi vào val/test hay đi kèm
+    mẫu gốc đang bị giữ lại. Biến thể chép ảnh, OCR, mô tả của mẫu gốc, chỉ thay caption; parent_id = id mẫu gốc."""
+    by_id = {r["id"]: r for r in splits["train"]}
+    added = []
+    for v in variants:
+        parent = by_id.get(str(v["parent_id"]))
+        if parent is None:
+            continue
+        if label2id[v["label"]] != parent["label"]:
+            raise ValueError(f"biến thể {v['variant_id']} mang nhãn {v['label']} khác nhãn mẫu gốc {v['parent_id']}")
+        added.append({**parent, "id": v["variant_id"], "caption": v["caption"], "parent_id": parent["id"]})
+    out = dict(splits)
+    out["train"] = splits["train"] + added
+    logger.info("augmentation: thêm %d/%d biến thể (mẫu gốc thuộc phần train)", len(added), len(variants))
+    return out
 
 
 def apply_fold_manifest(splits, manifest, index, train_sha256):
