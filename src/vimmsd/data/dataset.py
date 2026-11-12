@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, Sampler, WeightedRandomSampler
 from torchvision import transforms
 
 from vimmsd.data.augmentation import build_image_augment
@@ -591,15 +591,50 @@ def class_counts(dataset, num_classes):
     return [counts.get(i, 0) for i in range(num_classes)]
 
 
-def build_train_sampler(dataset, num_classes, mode):
+class EpochBudgetSampler(Sampler):
+    """Lấy đúng `num_samples` chỉ số mỗi epoch, không lặp trong một lượt hoán vị: hết lượt thì sang hoán vị mới,
+    phần dư nối sang epoch sau. Dùng cho train.steps_per_epoch khi lấy mẫu tự nhiên (sampler: random), để số bước
+    tối ưu mỗi epoch không phụ thuộc cỡ tập train (vd sau khi thêm mẫu augmentation)."""
+
+    def __init__(self, n, num_samples, generator=None):
+        self.n, self.num_samples, self.generator = n, num_samples, generator
+        self._queue = []
+
+    def __iter__(self):
+        out = []
+        while len(out) < self.num_samples:
+            if not self._queue:
+                self._queue = torch.randperm(self.n, generator=self.generator).tolist()
+            take = min(self.num_samples - len(out), len(self._queue))
+            out += self._queue[:take]
+            self._queue = self._queue[take:]
+        return iter(out)
+
+    def __len__(self):
+        return self.num_samples
+
+
+def sampling_weights(labels, power):
+    """Trọng số lấy mẫu mỗi mẫu = (số mẫu cùng lớp)^-power. power=1: cân bằng lớp hoàn toàn; 0.5: căn bậc hai
+    nghịch tần suất (docs/empirical_analysis_plan.md mục 8.1, B2); 0: tự nhiên. Đếm trên chính tập train đưa vào."""
+    counts = Counter(labels)
+    return [float(counts[l]) ** -power for l in labels]
+
+
+def build_train_sampler(dataset, num_classes, mode, power=None, num_samples=None):
+    """mode: random (tự nhiên) | weighted (power = 1, như trước) | power (cần data.sampler_power).
+    num_samples: số mẫu rút mỗi epoch (train.steps_per_epoch × batch × grad_accum); None = cỡ tập train."""
     if mode == "random":
-        return None
+        return None if num_samples is None else EpochBudgetSampler(len(dataset), num_samples)
     if mode == "weighted":
-        # oversampling: mỗi lớp được lấy mẫu với xác suất ngang nhau
-        counts = class_counts(dataset, num_classes)
-        weights = [1.0 / counts[l] for l in dataset.labels]
-        return WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    raise ValueError(f"sampler không hợp lệ: {mode}")
+        power = 1.0
+    elif mode == "power":
+        if power is None:
+            raise ValueError("data.sampler=power cần data.sampler_power (vd 0.5)")
+    else:
+        raise ValueError(f"sampler không hợp lệ: {mode}")
+    weights = sampling_weights(dataset.labels, power)
+    return WeightedRandomSampler(weights, num_samples=num_samples or len(weights), replacement=True)
 
 
 def build_dataloaders(cfg, datasets, collator):
@@ -607,7 +642,11 @@ def build_dataloaders(cfg, datasets, collator):
     loaders = {}
     for split, ds in datasets.items():
         is_train = split == "train"
-        sampler = build_train_sampler(ds, num_classes, cfg.data.sampler) if is_train else None
+        sampler = None
+        if is_train:
+            steps = cfg.train.get("steps_per_epoch")
+            num_samples = steps * cfg.train.batch_size * cfg.train.grad_accum if steps else None
+            sampler = build_train_sampler(ds, num_classes, cfg.data.sampler, cfg.data.get("sampler_power"), num_samples)
         loaders[split] = DataLoader(
             ds,
             batch_size=cfg.train.batch_size if is_train else cfg.train.eval_batch_size,

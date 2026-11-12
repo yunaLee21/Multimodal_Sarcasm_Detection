@@ -84,6 +84,11 @@ class Trainer:
         self.best_f1 = -1.0
         self.bad_epochs = 0
         self.history = []
+        # độ phủ dữ liệu (docs/empirical_analysis_plan.md mục 8.1): mẫu đã rút, bước tối ưu, id và mẫu gốc khác nhau
+        records = getattr(getattr(loaders["train"], "dataset", None), "records", None) or []
+        self._parent_of = {r["id"]: r.get("parent_id", r["id"]) for r in records}
+        self.exposure = {"draws": 0, "updates": 0}
+        self._seen_ids = set()
 
         resume_path = resolve_resume_path(t.get("resume_from"))
         if resume_path:
@@ -122,6 +127,9 @@ class Trainer:
                 self.scaler.update()
                 self.scheduler.step()
                 self.optimizer.zero_grad(set_to_none=True)
+                self.exposure["updates"] += 1
+            self.exposure["draws"] += len(batch["labels"])
+            self._seen_ids.update(batch.get("ids") or [])
 
             total += loss.item() * len(batch["labels"])
             n += len(batch["labels"])
@@ -190,7 +198,12 @@ class Trainer:
         best = getattr(self, "best_val_metrics", None)
         if best is None and (self.output_dir / "best_val_metrics.json").exists():  # resume: best từ lần chạy trước
             best = json.loads((self.output_dir / "best_val_metrics.json").read_text())
+        exposure = {**self.exposure, "unique_ids": len(self._seen_ids),
+                    "unique_parents": len({self._parent_of.get(i, i) for i in self._seen_ids})}
+        logger.info("độ phủ train: %s", exposure)
+        (self.output_dir / "exposure.json").write_text(json.dumps(exposure, indent=2))
         return {"best_val_macro_f1": best["macro_f1"] if best else self.best_f1, "best_val_select": self.best_f1,
+                "exposure": exposure,
                 "train_minutes": (time.time() - start) / 60,
                 "peak_vram_gb": peak_vram_gb, "history": self.history}
 

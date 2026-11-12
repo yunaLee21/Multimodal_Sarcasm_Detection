@@ -46,7 +46,8 @@ data:
     cache_file: text_preprocessed.json  # tên file trong cache_dir; meta.pipeline_key sai thì tự bỏ qua, tạo lại
   image_resize: pad    # pad (letterbox vuông, giữ toàn bộ ảnh) | crop (center-crop của processor, như code cũ)
   image_augment: false # crop 90-100% + chỉnh sáng/tương phản, chỉ khi train
-  sampler: random     # random | weighted (oversampling lớp hiếm)
+  sampler: random     # random | weighted (cân bằng lớp, trọng số 1/count) | power (trọng số count^-sampler_power)
+  sampler_power: null # sampler=power: 0.5 = căn bậc hai nghịch tần suất (empirical B2)
   # Tiền xử lý ảnh thành text (tạo trước bằng scripts/extract_image_text.py, xem notebooks/01b):
   # chữ trong ảnh (OCR) + mô tả ảnh (VLM), ghép thành segment thứ 2 của PhoBERT cạnh caption.
   image_text:
@@ -107,6 +108,7 @@ train:
   amp: true
   num_workers: 2
   early_stop_patience: 3
+  steps_per_epoch: null   # số bước tối ưu cố định mỗi epoch (ngân sách so sánh được giữa các cách lấy mẫu/augmentation); null = một lượt tập train
   resume_from: null   # file .pt hoặc thư mục chứa last.pt
   select_metric: macro_f1      # macro_f1 | weighted_f1: điểm val để chọn best.pt và early stopping
   select_exclude_labels: []    # macro_f1 bỏ các lớp này, vd [text-sarcasm] (val chỉ có 1 mẫu)
