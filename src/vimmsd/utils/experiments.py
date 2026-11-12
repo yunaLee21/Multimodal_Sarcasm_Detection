@@ -6,6 +6,7 @@ File plan (configs/experiments/*.yaml), đường dẫn config tính từ gốc 
     seeds: [42, 1, 2]
     overrides: [data.split_seed=42]  # áp cho mọi run, trước override riêng của run
     evaluate: [test]                 # split chạy scripts/evaluate.py sau khi train ([] = không chạy)
+    refresh_report: false            # mặc định true: sinh lại reports/experiment_report.md (báo cáo CoT) khi xong
     runs:
       - configs/text_only_frozen.yaml
       - config: configs/fusion_concat_frozen.yaml
@@ -49,6 +50,7 @@ def load_plan(path):
     plan["seeds"] = list(plan.get("seeds") or [42])
     plan["overrides"] = list(plan.get("overrides") or [])
     plan["evaluate"] = list(evaluate)
+    plan["refresh_report"] = bool(plan.get("refresh_report", True))   # false: không sinh lại reports/experiment_report.md
     plan["root"] = find_project_root(path)
     return plan
 

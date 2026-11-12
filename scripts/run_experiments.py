@@ -93,7 +93,8 @@ def main():
 
     out, md = summarize(plan, specs, out_dirs)
     print(f"\nTổng hợp trên val ({out}):\n{md}")
-    refresh_report()
+    if plan["refresh_report"]:  # plan empirical_*: không ghi đè báo cáo CoT (docs/empirical_analysis_plan.md mục 12)
+        refresh_report()
     failed = [j for j in finished if j.error]
     if failed:
         sys.exit("run lỗi: " + ", ".join(f"{j.name} ({j.error}, log {j.log})" for j in failed))

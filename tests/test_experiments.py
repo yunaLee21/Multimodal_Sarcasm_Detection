@@ -149,3 +149,13 @@ def test_run_on_gpus_uses_given_gpu_ids(tmp_path):
     done = run_on_gpus(jobs, num_gpus=8, gpu_ids=[3, 5])
     assert all(j.error is None for j in done)
     assert {(tmp_path / f"{n}.log").read_text().split()[-1] for n in "abc"} <= {"3", "5"}
+
+
+def test_load_plan_refresh_report_switch(tmp_path):
+    from vimmsd.utils.experiments import load_plan
+
+    base = "name: p\nruns: [configs/text_only_frozen.yaml]\n"
+    (tmp_path / "a.yaml").write_text(base)
+    (tmp_path / "b.yaml").write_text(base + "refresh_report: false\n")
+    assert load_plan(tmp_path / "a.yaml")["refresh_report"] is True
+    assert load_plan(tmp_path / "b.yaml")["refresh_report"] is False

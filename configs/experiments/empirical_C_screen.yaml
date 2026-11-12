@@ -1,0 +1,59 @@
+# Empirical study, Experiment C screening (docs/empirical_analysis_plan.md mục 8.1): C × 3 fold nội bộ có nhóm × seed 42.
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/empirical_C_screen.yaml --gpu-ids 0
+# Fold: data/processed/empirical/splits/folds_k3_s42.json (scripts/build_empirical_splits.py); val = fold giữ lại của train,
+# chọn checkpoint theo macro-F1 bốn lớp của fold đó (mục 4.3). Public/private test không dùng.
+# Ngân sách: 451 bước tối ưu mỗi epoch cho mọi treatment = một lượt fold train của B0 (ceil(7.204 / 16)); cùng tối đa
+# 20 epoch, warmup 10%, đánh giá mỗi epoch, early stopping patience 3.
+# B4/B5 (augmentation đã duyệt) thêm sau khi có augmentation_manifest.jsonl (mục 8.2).
+name: empirical_C_screen
+seeds: [42]
+overrides:
+  - train.eval_test=false
+  - train.select_metric=macro_f1
+  - train.select_exclude_labels=[]
+  - train.steps_per_epoch=451
+  - data.fold.manifest=data/processed/empirical/splits/folds_k3_s42.json
+  - train.num_workers=0          # /dev/shm của GPU server chỉ 64 MB; không ảnh hưởng kết quả
+evaluate: [val]                  # val_predictions.csv = dự đoán out-of-fold của fold giữ lại
+refresh_report: false
+runs:
+  # B0: CE, natural sampling
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B0_f0
+    overrides: [data.fold.index=0]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B0_f1
+    overrides: [data.fold.index=1]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B0_f2
+    overrides: [data.fold.index=2]
+  # B1: CE + square-root inverse class weights
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B1_f0
+    overrides: [data.fold.index=0, loss.class_weight=sqrt_inverse]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B1_f1
+    overrides: [data.fold.index=1, loss.class_weight=sqrt_inverse]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B1_f2
+    overrides: [data.fold.index=2, loss.class_weight=sqrt_inverse]
+  # B2: CE + square-root inverse-frequency sampling
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B2_f0
+    overrides: [data.fold.index=0, data.sampler=power, data.sampler_power=0.5]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B2_f1
+    overrides: [data.fold.index=1, data.sampler=power, data.sampler_power=0.5]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B2_f2
+    overrides: [data.fold.index=2, data.sampler=power, data.sampler_power=0.5]
+  # B3: focal loss, gamma 2, no class weights
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B3_f0
+    overrides: [data.fold.index=0, loss.name=focal, loss.gamma=2.0]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B3_f1
+    overrides: [data.fold.index=1, loss.name=focal, loss.gamma=2.0]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empC_B3_f2
+    overrides: [data.fold.index=2, loss.name=focal, loss.gamma=2.0]

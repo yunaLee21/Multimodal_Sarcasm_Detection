@@ -1,0 +1,28 @@
+# Empirical study, Experiment A: modality contributions (docs/empirical_analysis_plan.md mục 6, giao thức ở
+# reports/empirical_phase0.md mục 3). 7 model × 3 seed = 21 run, official split, plain CE, encoder đóng băng.
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/empirical_A.yaml --gpu-ids 0
+# Chọn checkpoint theo macro-F1 bỏ text-sarcasm trên val (public test); không chấm private test khi phát triển.
+name: empirical_A
+seeds: [1, 2, 42]
+overrides:
+  - train.eval_test=false
+  - train.select_metric=macro_f1
+  - train.select_exclude_labels=[text-sarcasm]
+  - train.num_workers=0          # /dev/shm của GPU server chỉ 64 MB; không ảnh hưởng kết quả
+evaluate: [val]                  # val_predictions.csv: xác suất từng mẫu cho bootstrap ghép cặp
+refresh_report: false
+runs:
+  - config: configs/text_only_frozen.yaml
+    name: empA_T
+  - config: configs/image_only_frozen.yaml
+    name: empA_I
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empA_C
+  - config: configs/fusion_multistream_ocr_frozen.yaml
+    name: empA_O
+  - config: configs/fusion_multistream_desc_frozen.yaml
+    name: empA_D
+  - config: configs/fusion_multistream_frozen.yaml
+    name: empA_OD
+  - config: configs/fusion_multistream_clip_frozen.yaml
+    name: empA_M
