@@ -429,10 +429,38 @@ def load_all_records(cfg):
     if private is not None:
         splits["private_test"] = private
     fold = cfg.data.get("fold") or {}
-    if fold.get("index") is not None:
+    if fold.get("manifest"):
+        if cfg.train.get("eval_test", True):
+            raise ValueError("data.fold.manifest là chế độ phát triển nội bộ: đặt train.eval_test=false "
+                             "(docs/empirical_analysis_plan.md mục 4.3)")
+        manifest = json.loads(Path(fold["manifest"]).read_text(encoding="utf-8"))
+        from vimmsd.data.splits import file_sha256
+
+        splits = apply_fold_manifest(splits, manifest, fold.get("index"), file_sha256(data_dir / cfg.data.train_json))
+    elif fold.get("index") is not None:
         held_out = fold_of(splits["train"], fold.get("k", 5), fold.get("seed", 42))
         splits["train"] = [r for r in splits["train"] if held_out[r["id"]] != fold["index"]]
     return apply_caption_filter(splits, cfg.data.get("caption_filter"))
+
+
+def apply_fold_manifest(splits, manifest, index, train_sha256):
+    """Fold nội bộ có nhóm (scripts/build_empirical_splits.py): train = các fold khác, val = fold `index` của train.
+    Báo lỗi nếu manifest được tạo từ file train khác, thiếu id, hoặc index ngoài khoảng."""
+    meta, folds = manifest["meta"], manifest["folds"]
+    expected = meta["checksums"]["train"]["json_sha256"]
+    if expected != train_sha256:
+        raise ValueError(f"manifest fold tạo từ train sha256 {expected[:12]}, file train hiện tại {train_sha256[:12]}")
+    if index is None or index not in range(meta["k"]):
+        raise ValueError(f"data.fold.index phải trong 0..{meta['k'] - 1}, nhận {index!r}")
+    missing = [r["id"] for r in splits["train"] if r["id"] not in folds]
+    if missing:
+        raise ValueError(f"{len(missing)} mẫu train không có trong manifest fold, vd {missing[:3]}")
+    out = dict(splits)
+    out["train"] = [r for r in splits["train"] if folds[r["id"]] != index]
+    out["val"] = [r for r in splits["train"] if folds[r["id"]] == index]
+    logger.info("fold %d/%d từ manifest (seed %s): train %d | val (fold giữ lại) %d", index, meta["k"], meta["seed"],
+                len(out["train"]), len(out["val"]))
+    return out
 
 
 def fold_of(records, k=5, seed=42):

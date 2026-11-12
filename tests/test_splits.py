@@ -50,3 +50,29 @@ def test_overlap_stats():
 
 def test_digest_stable():
     assert S.digest({"2": "b", "10": "a"}) == S.digest({"10": "a", "2": "b"})
+
+
+def _manifest(folds, sha="abc", k=3):
+    return {"meta": {"k": k, "seed": 42, "checksums": {"train": {"json_sha256": sha}}}, "folds": folds}
+
+
+def test_apply_fold_manifest_held_out_fold_becomes_val():
+    import pytest
+
+    from vimmsd.data.dataset import apply_fold_manifest
+
+    train = [{"id": str(i), "label": i % 2} for i in range(6)]
+    public = [{"id": "p0", "label": 0}]
+    splits = {"train": train, "val": public, "test": [], "public_test": public}
+    folds = {str(i): i % 3 for i in range(6)}
+    out = apply_fold_manifest(splits, _manifest(folds), 1, "abc")
+    assert [r["id"] for r in out["val"]] == ["1", "4"]
+    assert [r["id"] for r in out["train"]] == ["0", "2", "3", "5"]
+    assert not {r["id"] for r in out["val"]} & {r["id"] for r in out["train"]}
+    assert out["public_test"] is public and splits["train"] is train   # không sửa đầu vào
+    with pytest.raises(ValueError, match="sha256"):
+        apply_fold_manifest(splits, _manifest(folds, sha="zzz"), 1, "abc")
+    with pytest.raises(ValueError, match="index"):
+        apply_fold_manifest(splits, _manifest(folds), 3, "abc")
+    with pytest.raises(ValueError, match="không có trong manifest"):
+        apply_fold_manifest(splits, _manifest({k: v for k, v in folds.items() if k != "5"}), 0, "abc")
