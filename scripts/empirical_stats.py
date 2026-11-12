@@ -109,12 +109,16 @@ def contrasts_md(r, labels):
 
 
 def cmd_pooled(args, cfg, labels):
-    rows = []
+    rows, pooled, ids = [], {}, None
     for t in args.treatments:
         frames = [load_preds(Path(args.runs_dir) / f"{t}_f{f}_s{args.train_seed}", labels) for f in range(args.folds)]
         df = pd.concat(frames)
         if df.index.duplicated().any():
             raise ValueError(f"{t}: một mẫu xuất hiện ở nhiều fold")
+        ids = ids or sorted(df.index, key=lambda x: (len(x), x))
+        if set(df.index) != set(ids):
+            raise ValueError(f"{t}: tập mẫu out-of-fold khác treatment đầu")
+        pooled[t] = df.loc[ids]
         y, p = df["y"].to_numpy(int), df["p"].to_numpy(int)
         rows.append({"treatment": t, "n": len(df), "macro_f1": S.macro_f1(y, p, len(labels)),
                      "per_fold_macro_f1": [S.macro_f1(f["y"].to_numpy(int), f["p"].to_numpy(int), len(labels)) for f in frames],
@@ -125,7 +129,31 @@ def cmd_pooled(args, cfg, labels):
         md.append(f"| {r['treatment']} | {r['n']} | {r['macro_f1']:.4f} | " + " ".join(f"{x:.3f}" for x in r["per_fold_macro_f1"])
                   + " | " + " | ".join(f"{c['precision']:.2f}/{c['recall']:.2f}/{c['f1']:.3f} ({c['support']})"
                                        for c in r["per_class"].values()) + " |")
-    write(args.runs_dir, "pooled_" + "_".join(args.treatments), {"rows": rows, **meta()}, "\n".join(md) + "\n")
+    contrasts = []
+    if args.baseline:
+        groups = None
+        if args.splits_manifest:  # bootstrap theo nhóm của fold nội bộ (caption hoặc ảnh trùng)
+            g = json.loads(Path(args.splits_manifest).read_text(encoding="utf-8"))["groups"]
+            groups = np.array([g[i] for i in ids])
+        y = pooled[args.baseline]["y"].to_numpy(int)
+        for t in args.treatments:
+            if t == args.baseline:
+                continue
+            a_p, b_p = [pooled[t]["p"].to_numpy(int)], [pooled[args.baseline]["p"].to_numpy(int)]
+            c = {"contrast": f"{t} - {args.baseline}", **S.paired_contrast(y, a_p, b_p, len(labels), (), args.n_boot, args.seed)}
+            if groups is not None:
+                gc = S.paired_contrast(y, a_p, b_p, len(labels), (), args.n_boot, args.seed, groups)
+                c["group_ci95"], c["group_p_boot"] = gc["ci95"], gc["p_boot"]
+            contrasts.append(c)
+        md += ["", f"Paired bootstrap against {args.baseline} ({args.n_boot} replicates over out-of-fold examples"
+               + (", groups resampled" if groups is not None else "") + "; one training seed, so training randomness is not "
+               "included):", "", "| contrast | Δ macro-F1 | 95% CI | p | group 95% CI | group p |", "|---|---|---|---|---|---|"]
+        for c in contrasts:
+            g = c.get("group_ci95")
+            md.append(f"| {c['contrast']} | {c['mean']:+.4f} | [{c['ci95'][0]:+.4f}, {c['ci95'][1]:+.4f}] | {c['p_boot']:.3f} | "
+                      + (f"[{g[0]:+.4f}, {g[1]:+.4f}] | {c['group_p_boot']:.3f}" if g else "— | —") + " |")
+    write(args.runs_dir, "pooled_" + "_".join(args.treatments), {"rows": rows, "contrasts": contrasts, **meta()},
+          "\n".join(md) + "\n")
 
 
 def subset_masks(cfg, ids):
@@ -211,6 +239,10 @@ def main():
             p.add_argument("--treatments", nargs="+", required=True)
             p.add_argument("--folds", type=int, default=3)
             p.add_argument("--train-seed", type=int, default=42)
+            p.add_argument("--baseline", default=None, help="treatment làm mốc cho bootstrap ghép cặp, vd empC_B0")
+            p.add_argument("--splits-manifest", default="data/processed/empirical/splits/folds_k3_s42.json")
+            p.add_argument("--n-boot", type=int, default=2000)
+            p.add_argument("--seed", type=int, default=0)
         if name == "subsets":
             p.add_argument("--models", nargs="+", required=True)
     args = parser.parse_args()
