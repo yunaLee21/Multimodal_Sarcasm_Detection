@@ -1,0 +1,32 @@
+# Empirical study, Phase 3 (docs/empirical_analysis_plan.md mục 8.4, 9, 10; reports/empirical_phase2.md mục 5).
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/empirical_phase3.yaml --gpu-ids 0
+# Cùng giao thức với empirical_A.yaml; so sánh ghép cặp với các run empA_* cùng seed.
+# - empB1_C: C với treatment đã chọn ở vòng sàng lọc (B1, CE + trọng số lớp căn bậc hai nghịch tần suất), train đầy đủ.
+# - empD_*_notags: T và C train và đánh giá khi caption đã xoá thẻ trang nguồn (data.caption_filter=source_tags),
+#   OCR giữ nguyên. Cache text riêng vì caption đã đổi.
+# - empE_*_B1: chuyển B1 sang T và M.
+name: empirical_phase3
+seeds: [1, 2, 42]
+overrides:
+  - train.eval_test=false
+  - train.select_metric=macro_f1
+  - train.select_exclude_labels=[text-sarcasm]
+  - train.num_workers=0          # /dev/shm của GPU server chỉ 64 MB; không ảnh hưởng kết quả
+evaluate: [val]
+refresh_report: false
+runs:
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empB1_C
+    overrides: [loss.class_weight=sqrt_inverse]
+  - config: configs/text_only_frozen.yaml
+    name: empD_T_notags
+    overrides: [data.caption_filter=source_tags, data.text.cache_file=text_preprocessed_notags.json]
+  - config: configs/fusion_concat_frozen_reg.yaml
+    name: empD_C_notags
+    overrides: [data.caption_filter=source_tags, data.text.cache_file=text_preprocessed_notags.json]
+  - config: configs/text_only_frozen.yaml
+    name: empE_T_B1
+    overrides: [loss.class_weight=sqrt_inverse]
+  - config: configs/fusion_multistream_clip_frozen.yaml
+    name: empE_M_B1
+    overrides: [loss.class_weight=sqrt_inverse]
