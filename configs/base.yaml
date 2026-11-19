@@ -93,10 +93,13 @@ model:
   dropout: 0.2
 
 loss:
-  name: ce            # ce | focal
+  name: ce            # ce | focal | logit_adjustment
   class_weight: null  # null | inverse | sqrt_inverse | effective
   gamma: 2.0          # chỉ dùng cho focal
+  tau: 1.0            # hệ số τ của logit adjustment: cộng τ·log(prior) vào logit khi train
   label_smoothing: 0.0
+  mixup_alpha: 0.0    # > 0: Manifold Mixup sau fusion, chỉ flat head + CE, không class weight
+  mixup_minority_labels: [text-sarcasm, image-sarcasm]  # anchor lớp hiếm giữ ít nhất 50% đặc trưng
   lambda_s: 0.0       # hierarchical: BCE thêm cho tầng S (có châm biếm không)
   lambda_axis: 0.0    # BCE của head T/I
   lambda_rat: 0.0     # 1 - cos(phép chiếu vector fusion, embedding reasoning)

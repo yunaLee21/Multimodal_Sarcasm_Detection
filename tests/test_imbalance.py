@@ -5,14 +5,20 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pytest
+import torch
+import torch.nn.functional as F
 from PIL import Image
 from torch.utils.data import WeightedRandomSampler
 
+from vimmsd.analysis.calibration import apply_class_multipliers, tune_class_multipliers
 from vimmsd.data.augmentation import (ACCEPT, REJECT, BackTranslator, accepted_variants, augment_records,
                                       auto_review, read_manifest, restore_emojis, write_manifest)
 from vimmsd.data.dataset import (ViMMSDDataset, build_train_sampler, draws_per_epoch, load_all_records,
                                  sampling_summary, sampling_weights)
+from vimmsd.models.fusion import manifold_mixup
+from vimmsd.training.losses import LogitAdjustmentLoss, ManifoldMixupLoss, build_training_loss
 from vimmsd.utils.config import load_config
 
 LABELS = ["not-sarcasm", "text-sarcasm", "image-sarcasm", "multi-sarcasm"]
@@ -201,3 +207,67 @@ def test_review_csv_roundtrip(tmp_path):
     fill("maybe", "")
     with pytest.raises(ValueError, match="accept"):
         script.import_review([dict(r) for r in rows], csv_path)
+
+
+def test_logit_adjustment_matches_manual_shifted_cross_entropy():
+    counts = [8, 1, 1, 2]
+    logits = torch.randn(5, 4)
+    targets = torch.tensor([0, 1, 2, 3, 1])
+    loss_fn = LogitAdjustmentLoss(counts, tau=0.5)
+    priors = torch.tensor(counts, dtype=torch.float)
+    expected = F.cross_entropy(logits + 0.5 * (priors / priors.sum()).log(), targets)
+    assert torch.isclose(loss_fn(logits, targets), expected)
+
+
+def test_manifold_mixup_keeps_minority_anchor_weight():
+    torch.manual_seed(7)
+    z = torch.arange(24, dtype=torch.float).reshape(4, 6)
+    labels = torch.tensor([0, 1, 0, 2])
+    mixed, lam, perm = manifold_mixup(z, labels, alpha=0.2, minority_labels=(1, 2))
+    assert mixed.shape == z.shape and perm.shape == labels.shape
+    assert (lam[[1, 3]] >= 0.5).all()
+    assert torch.allclose(mixed, lam * z + (1 - lam) * z[perm])
+
+
+def test_manifold_mixup_loss_uses_soft_targets():
+    logits = torch.randn(2, 4)
+    y = torch.tensor([1, 3])
+    lam = torch.tensor([[0.75], [0.25]])
+    perm = torch.tensor([1, 0])
+    loss_fn = ManifoldMixupLoss(alpha=0.2)
+    loss, parts = loss_fn({"logits": logits, "mixup_lambda": lam, "mixup_permutation": perm}, {"labels": y})
+    one_hot = F.one_hot(y, 4).float()
+    target = lam * one_hot + (1 - lam) * one_hot[perm]
+    expected = -(target * F.log_softmax(logits, dim=-1)).sum(-1).mean()
+    assert torch.isclose(loss, expected) and set(parts) == {"cls"}
+
+
+def test_advanced_loss_configs():
+    cfg = load_config(ROOT / "configs/fusion_concat_frozen_reg_mixup.yaml", env="local")
+    loss = build_training_loss(cfg, [30, 3, 6, 20])
+    assert loss.uses_mixup and loss.mixup_minority_labels == (1, 2)
+    invalid = load_config(ROOT / "configs/fusion_concat_frozen_reg_mixup.yaml",
+                          overrides=["loss.class_weight=sqrt_inverse"], env="local")
+    with pytest.raises(ValueError, match="không class weight"):
+        build_training_loss(invalid, [30, 3, 6, 20])
+
+
+def test_class_multipliers_change_decision_and_renormalize_probabilities():
+    probabilities = np.array([[0.60, 0.25, 0.10, 0.05], [0.80, 0.10, 0.05, 0.05]])
+    adjusted = apply_class_multipliers(probabilities, [1.0, 3.0, 1.0, 1.0])
+    assert adjusted[0].argmax() == 1 and adjusted[1].argmax() == 0
+    assert np.allclose(adjusted.sum(axis=1), 1.0)
+
+
+def test_calibration_optimization_does_not_reduce_calibration_macro_f1():
+    probabilities = np.array([
+        [0.70, 0.20, 0.05, 0.05], [0.60, 0.25, 0.10, 0.05],
+        [0.50, 0.40, 0.05, 0.05], [0.45, 0.40, 0.10, 0.05],
+        [0.20, 0.10, 0.60, 0.10], [0.15, 0.10, 0.65, 0.10],
+        [0.10, 0.10, 0.10, 0.70], [0.10, 0.10, 0.20, 0.60],
+    ])
+    labels = np.array([0, 0, 1, 1, 2, 2, 3, 3])
+    multipliers, info = tune_class_multipliers(probabilities, labels, maxiter=8, popsize=6, seed=0)
+    assert multipliers.shape == (4,) and multipliers[0] == 1.0
+    assert np.all((multipliers >= 0.1) & (multipliers <= 10.0))
+    assert info["calibration_macro_f1"] >= info["baseline_macro_f1"]

@@ -7,6 +7,7 @@ py_vncorenlp         # tách từ VnCoreNLP cho PhoBERT (cần Java >= 8)
 underthesea          # tách từ dự phòng (word_segment: underthesea)
 emoji                # xử lý emoji trong caption
 scikit-learn         # metrics
+scipy                # differential evolution cho post-hoc calibration B8
 pyyaml               # đọc config
 pandas
 openpyxl   # sheet viết giải thích (scripts/make_explanation_sheet.py)

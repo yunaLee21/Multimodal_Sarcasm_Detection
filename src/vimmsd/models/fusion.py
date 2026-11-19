@@ -7,6 +7,21 @@ import torch.nn as nn
 # để đổi fusion chỉ cần sửa `model.modality` trong config.
 
 
+def manifold_mixup(z, labels, alpha, minority_labels=()):
+    """Trộn z với một hoán vị trong batch; anchor thuộc lớp hiếm giữ ít nhất 50% đặc trưng."""
+    if alpha <= 0:
+        raise ValueError("alpha phải > 0")
+    concentration = torch.tensor(float(alpha), dtype=torch.float32, device=z.device)
+    lam = torch.distributions.Beta(concentration, concentration).sample((z.shape[0], 1))
+    perm = torch.randperm(z.shape[0], device=z.device)
+    if minority_labels:
+        minority_ids = torch.as_tensor(tuple(minority_labels), dtype=labels.dtype, device=labels.device)
+        minority = torch.isin(labels, minority_ids).unsqueeze(1)
+        lam = torch.where(minority & (lam < 0.5), 1 - lam, lam)
+    weight = lam.to(z.dtype)
+    return weight * z + (1 - weight) * z[perm], lam, perm
+
+
 class TextOnlyFusion(nn.Module):
     def __init__(self, text_dim, **_):
         super().__init__()

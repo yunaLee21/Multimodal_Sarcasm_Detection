@@ -37,6 +37,48 @@ class FocalLoss(nn.Module):
         return loss.mean()
 
 
+class LogitAdjustmentLoss(nn.Module):
+    """CE trên logit đã cộng τ·log(prior), chỉ áp dụng khi train (Menon et al., ICLR 2021)."""
+
+    def __init__(self, class_counts, tau=1.0, weight=None, label_smoothing=0.0):
+        super().__init__()
+        counts = torch.as_tensor(class_counts, dtype=torch.float).clamp(min=1)
+        self.tau = float(tau)
+        self.register_buffer("log_priors", (counts / counts.sum()).log())
+        self.ce = nn.CrossEntropyLoss(weight=weight, label_smoothing=label_smoothing)
+
+    def forward(self, logits, targets):
+        return self.ce(logits.float() + self.tau * self.log_priors, targets)
+
+
+class ManifoldMixupLoss(nn.Module):
+    """Soft-target CE cho logit của vector fusion đã mixup; chỉ dùng với flat head."""
+
+    uses_outputs = True
+    uses_mixup = True
+
+    def __init__(self, alpha=0.2, minority_labels=(), label_smoothing=0.0):
+        super().__init__()
+        if alpha <= 0:
+            raise ValueError("loss.mixup_alpha phải > 0")
+        self.mixup_alpha = float(alpha)
+        self.mixup_minority_labels = tuple(minority_labels)
+        self.label_smoothing = float(label_smoothing)
+
+    def forward(self, out, batch):
+        logits = out["logits"].float()
+        y = batch["labels"]
+        lam = out["mixup_lambda"].float()
+        perm = out["mixup_permutation"]
+        n_classes = logits.shape[1]
+        smooth = self.label_smoothing / n_classes
+        target_a = F.one_hot(y, n_classes).float() * (1 - self.label_smoothing) + smooth
+        target_b = target_a[perm]
+        target = lam * target_a + (1 - lam) * target_b
+        loss = -(target * F.log_softmax(logits, dim=-1)).sum(dim=-1).mean()
+        return loss, {"cls": float(loss.detach())}
+
+
 class SarcasmLoss(nn.Module):
     """Loss train dùng đầu ra đầy đủ của SarcasmClassifier.forward_outputs (reports/plan/experiment_design.md mục 5).
 
@@ -112,6 +154,14 @@ def build_training_loss(cfg, class_counts):
     """Loss cho Trainer: SarcasmLoss bọc build_loss. Head flat không bật loss phụ nào thì kết quả giống hệt build_loss."""
     head = cfg.model.get("head") or {}
     head_type = head.get("type", "flat")
+    mixup_alpha = float(cfg.loss.get("mixup_alpha", 0.0) or 0.0)
+    if mixup_alpha:
+        if head_type != "flat" or cfg.loss.name != "ce" or cfg.loss.get("class_weight"):
+            raise ValueError("Manifold Mixup hiện chỉ hỗ trợ flat head + CE, không class weight")
+        if any(float(cfg.loss.get(k, 0.0) or 0.0) for k in ("lambda_s", "lambda_axis", "lambda_rat")):
+            raise ValueError("Manifold Mixup chưa hỗ trợ các loss phụ")
+        minority = tuple(cfg.data.labels.index(name) for name in cfg.loss.get("mixup_minority_labels") or [])
+        return ManifoldMixupLoss(mixup_alpha, minority, cfg.loss.get("label_smoothing", 0.0))
     route_weight = None
     if head_type == "cascade" and cfg.loss.get("class_weight"):
         from vimmsd.models.heads import LabelIndex
@@ -132,4 +182,7 @@ def build_loss(loss_cfg, class_counts):
         return nn.CrossEntropyLoss(weight=weight, label_smoothing=loss_cfg.get("label_smoothing", 0.0))
     if loss_cfg.name == "focal":
         return FocalLoss(gamma=loss_cfg.get("gamma", 2.0), alpha=weight)
+    if loss_cfg.name == "logit_adjustment":
+        return LogitAdjustmentLoss(class_counts, tau=loss_cfg.get("tau", 1.0), weight=weight,
+                                   label_smoothing=loss_cfg.get("label_smoothing", 0.0))
     raise ValueError(f"loss không hợp lệ: {loss_cfg.name}")

@@ -108,10 +108,15 @@ class Trainer:
         pbar = tqdm(loader, desc=f"epoch {epoch + 1}/{self.epochs}", leave=False)
         part_sums = {}
         uses_outputs = getattr(self.loss_fn, "uses_outputs", False)
+        uses_mixup = getattr(self.loss_fn, "uses_mixup", False)
         for step, batch in enumerate(pbar):
             batch = move_to_device(batch, self.device)
             with torch.autocast(self.device.type, dtype=torch.float16, enabled=self.use_amp):
-                out = self.model.forward_outputs(batch) if uses_outputs else self.model(batch)
+                if uses_mixup:
+                    out = self.model.forward_mixup(batch, self.loss_fn.mixup_alpha,
+                                                   self.loss_fn.mixup_minority_labels)
+                else:
+                    out = self.model.forward_outputs(batch) if uses_outputs else self.model(batch)
             if uses_outputs:
                 loss, parts = self.loss_fn(out, batch)
                 for k, v in parts.items():

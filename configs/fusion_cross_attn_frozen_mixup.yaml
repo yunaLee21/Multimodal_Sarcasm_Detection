@@ -1,0 +1,15 @@
+# 11: Cross-Attention + Minority-aware Manifold Mixup (α=0.2).
+# Kế thừa fusion_cross_attn_frozen: encoder đóng băng, chỉ train cross-attn blocks + head.
+# Mixup trên vector fusion sau cross-attention, anchor lớp hiếm giữ ít nhất 50% đặc trưng.
+inherit: fusion_cross_attn_frozen.yaml
+loss:
+  name: ce
+  class_weight: null
+  mixup_alpha: 0.2
+  mixup_minority_labels: [text-sarcasm, image-sarcasm]
+model:
+  dropout: 0.3          # tăng dropout head để chống overfitting
+train:
+  lr_head: 5.0e-4       # giảm để ổn định khi train với soft target
+  weight_decay: 0.05
+  early_stop_patience: 5

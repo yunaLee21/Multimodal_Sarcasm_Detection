@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from vimmsd.models.fusion import FUSIONS
+from vimmsd.models.fusion import FUSIONS, manifold_mixup
 from vimmsd.models.heads import HEAD_TYPES, CascadeHead, HierarchicalHead, LabelIndex, mlp
 from vimmsd.models.image_encoder import ImageEncoder
 from vimmsd.models.text_encoder import TextEncoder
@@ -114,6 +114,13 @@ class SarcasmClassifier(nn.Module):
 
     def forward_outputs(self, batch):
         return self.heads(self.fusion(*self.encode(batch)))
+
+    def forward_mixup(self, batch, alpha, minority_labels=()):
+        z = self.fusion(*self.encode(batch))
+        mixed, lam, perm = manifold_mixup(z, batch["labels"], alpha, minority_labels)
+        out = self.heads(mixed)
+        out["mixup_lambda"], out["mixup_permutation"] = lam, perm
+        return out
 
     def forward(self, batch):
         return self.forward_outputs(batch)["logits"]

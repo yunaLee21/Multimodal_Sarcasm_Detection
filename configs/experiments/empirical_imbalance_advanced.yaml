@@ -1,0 +1,18 @@
+# Phase 9 mở rộng: B1 (đối chứng hiện tại), B6 Logit Adjustment, B7 Manifold Mixup.
+# Chạy trên Kaggle: python scripts/run_experiments.py --plan configs/experiments/empirical_imbalance_advanced.yaml
+# Không chấm private test khi screening. evaluate=[val] để B8 dùng xác suất trên tập đánh giá tách biệt.
+name: empirical_imbalance_advanced
+seeds: [42]
+overrides:
+  - data.split_seed=42
+  - train.eval_test=false
+  - train.select_exclude_labels=[text-sarcasm]
+evaluate: [val]
+refresh_report: false
+runs:
+  - config: configs/fusion_concat_frozen_reg_cw.yaml
+    name: emp_c_cw
+  - config: configs/fusion_concat_frozen_reg_logit_adjustment.yaml
+    name: emp_c_logit_adjust
+  - config: configs/fusion_concat_frozen_reg_mixup.yaml
+    name: emp_c_mixup

@@ -347,6 +347,24 @@ def test_trainer_runs_with_new_heads(monkeypatch, tmp_path, head_type):
     load_checkpoint(tmp_path / "best.pt", fresh)
 
 
+def test_trainer_runs_manifold_mixup(monkeypatch, tmp_path):
+    from vimmsd.training.trainer import Trainer
+
+    torch.manual_seed(0)
+    cfg = load_config("configs/fusion_concat_frozen_reg_mixup.yaml", [
+        "train.epochs=1", "train.amp=false", f"paths.local.output_dir={tmp_path}"], env="local")
+    model = _tiny_classifier(monkeypatch, None)
+
+    def batch(n):
+        return {"ids": [str(i) for i in range(n)], "input_ids": torch.randint(5, 50, (n, 6)),
+                "attention_mask": torch.ones(n, 6, dtype=torch.long), "labels": torch.arange(n) % 4}
+
+    loaders = {"train": [batch(8), batch(8)], "val": [batch(8)]}
+    trainer = Trainer(model, build_training_loss(cfg, [10, 3, 4, 8]), loaders, cfg, tmp_path)
+    summary = trainer.fit()
+    assert len(summary["history"]) == 1 and (tmp_path / "best.pt").exists()
+
+
 @pytest.mark.parametrize("load_in_4bit", [False, True])
 def test_teacher_4bit_only_changes_model_kwargs(monkeypatch, load_in_4bit):
     import transformers

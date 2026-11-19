@@ -1,0 +1,7 @@
+# B7: Manifold Mixup trên vector fusion, anchor lớp hiếm giữ ít nhất 50% đặc trưng.
+inherit: fusion_concat_frozen_reg.yaml
+loss:
+  name: ce
+  class_weight: null
+  mixup_alpha: 0.2
+  mixup_minority_labels: [text-sarcasm, image-sarcasm]

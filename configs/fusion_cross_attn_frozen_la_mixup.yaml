@@ -1,0 +1,15 @@
+# 11: Cross-Attention + Logit Adjustment + Manifold Mixup (kết hợp cả hai).
+# Mixup tạo soft target, LA cộng thêm prior-shift; thực nghiệm kiểm tra liệu chúng bổ trợ nhau.
+inherit: fusion_cross_attn_frozen.yaml
+loss:
+  name: logit_adjustment
+  tau: 1.0
+  class_weight: null
+  mixup_alpha: 0.2
+  mixup_minority_labels: [text-sarcasm, image-sarcasm]
+model:
+  dropout: 0.3          # tăng dropout head để chống overfitting
+train:
+  lr_head: 5.0e-4
+  weight_decay: 0.05
+  early_stop_patience: 5

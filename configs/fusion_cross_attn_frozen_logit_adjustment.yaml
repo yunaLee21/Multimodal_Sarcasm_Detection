@@ -1,0 +1,14 @@
+# 11: Cross-Attention + Logit Adjustment (τ=1.0), không class weight.
+# Kế thừa fusion_cross_attn_frozen: encoder đóng băng, chỉ train cross-attn blocks + head.
+# Khác so với B6 (trên backbone concat): backbone là cross-attention thay vì concat.
+inherit: fusion_cross_attn_frozen.yaml
+model:
+  dropout: 0.3          # tăng dropout head để chống overfitting
+loss:
+  name: logit_adjustment
+  tau: 1.0
+  class_weight: null
+train:
+  lr_head: 5.0e-4       # giảm so với 1e-3 mặc định: cross-attn dễ overfit hơn concat
+  weight_decay: 0.05    # tăng regularization
+  early_stop_patience: 5  # patience rộng hơn vì Logit Adjustment cần thêm epoch ổn định

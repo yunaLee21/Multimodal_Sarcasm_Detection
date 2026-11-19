@@ -1,0 +1,6 @@
+# B6: Logit Adjustment (Menon et al., ICLR 2021), không dùng thêm class weight.
+inherit: fusion_concat_frozen_reg.yaml
+loss:
+  name: logit_adjustment
+  tau: 1.0
+  class_weight: null
