@@ -1,0 +1,13 @@
+seed,true,n,"LA right, CE wrong","CE right, LA wrong"
+42,not-sarcasm,458,13,57
+42,text-sarcasm,7,0,0
+42,image-sarcasm,40,6,1
+42,multi-sarcasm,999,169,39
+1,not-sarcasm,458,28,23
+1,text-sarcasm,7,0,0
+1,image-sarcasm,40,8,0
+1,multi-sarcasm,999,12,71
+2,not-sarcasm,458,13,84
+2,text-sarcasm,7,0,0
+2,image-sarcasm,40,1,6
+2,multi-sarcasm,999,163,32

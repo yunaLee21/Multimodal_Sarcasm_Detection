@@ -1,0 +1,30 @@
+# EACL SRW WS-B final: retrain the Gate B τ on the full official train, 3 seeds (reports/plan/eacl_srw_run_plan.md §3.2). UNCOMMITTED.
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/p12_tau_final.yaml --gpu-ids 0
+# Settings = Phase 11 controlled ca_la runs exactly (p11_controlled/resolved_configs/ca_la_s*.overrides), only loss.tau changes.
+# data.split=official: val = public test (checkpoint selection, as in Phase 11 — disclosed), test = private test.
+# The private test is scored ONCE here; log it in data/server/outputs/p12_srw/_private_test_log.md. No further tuning.
+# tau100 = same-code rerun of ca_la (τ = 1.0) so the τ comparison uses identical code; it should reproduce ca_la_s*.
+name: p12_tau_final
+seeds: [42, 1, 2]
+overrides:
+  - train.lr_head=5e-4
+  - train.weight_decay=0.05
+  - model.dropout=0.3
+  - train.early_stop_patience=5
+  - loss.class_weight=null
+  - loss.mixup_alpha=0.0
+  - loss.name=logit_adjustment
+  - data.image_augment=false
+  - data.augment.file=null
+  - data.sampler=random
+  - eval.prior_correction=false
+  - train.select_metric=macro_f1
+  - train.select_exclude_labels=[]
+  - train.num_workers=0          # /dev/shm is 64 MB on this server
+  - data.split_seed=42
+  - paths.server.output_dir=data/server/outputs/p12_srw
+evaluate: [val, test]
+refresh_report: false
+runs:
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: final_tau075, overrides: [loss.tau=0.75]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: final_tau100, overrides: [loss.tau=1.0]}

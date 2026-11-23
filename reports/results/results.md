@@ -183,6 +183,24 @@ Bảng này phải nằm cuối file: `scripts/train.py` ghi thêm dòng mới v
 | 2026-11-22 | `ca_ce_s1` | `de71102` | server | 0.3724 | 0.3784 | 11.7 | Phase11 controlled ce seed 1 | peak VRAM 1.33 GB |
 | 2026-11-22 | `ca_la_s2` | `de71102` | server | 0.4042 | 0.3890 | 10.2 | Phase11 controlled la seed 2 | peak VRAM 1.32 GB |
 | 2026-11-22 | `ca_ce_s2` | `de71102` | server | 0.4004 | 0.4167 | 22.6 | Phase11 controlled ce seed 2 | peak VRAM 1.32 GB |
-| 2026-11-22 | `p11_caption_la_s42` | `f8f25ab` | server | 0.3958 | nan | 1.3 | plan phase11_image_contribution | peak VRAM 0.87 GB |
-| 2026-11-22 | `p11_caption_la_s1` | `f8f25ab` | server | 0.3862 | nan | 1.3 | plan phase11_image_contribution | peak VRAM 0.87 GB |
-| 2026-11-22 | `p11_caption_la_s2` | `f8f25ab` | server | 0.3926 | nan | 2.2 | plan phase11_image_contribution | peak VRAM 0.87 GB |
+| 2026-11-22 | `p11_caption_la_s42` | `f8f25ab` | server | 0.3958 | 0.3838 | 1.3 | plan phase11_image_contribution | peak VRAM 0.87 GB |
+| 2026-11-22 | `p11_caption_la_s1` | `f8f25ab` | server | 0.3862 | 0.3956 | 1.3 | plan phase11_image_contribution | peak VRAM 0.87 GB |
+| 2026-11-22 | `p11_caption_la_s2` | `f8f25ab` | server | 0.3926 | 0.3892 | 2.2 | plan phase11_image_contribution | peak VRAM 0.87 GB |
+| 2026-11-23 | `tau025_f0_s42` | `b0a772c` | server | 0.3691 | nan | 27.4 | plan p12_tau_screen | peak VRAM 1.33 GB |
+| 2026-11-23 | `tau025_f1_s42` | `b0a772c` | server | 0.3869 | nan | 14.7 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau025_f2_s42` | `b0a772c` | server | 0.3955 | nan | 12.5 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau050_f0_s42` | `b0a772c` | server | 0.3834 | nan | 20.9 | plan p12_tau_screen | peak VRAM 1.33 GB |
+| 2026-11-23 | `tau050_f1_s42` | `b0a772c` | server | 0.3854 | nan | 8.4 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau050_f2_s42` | `b0a772c` | server | 0.3904 | nan | 7.3 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau075_f0_s42` | `b0a772c` | server | 0.4012 | nan | 19.7 | plan p12_tau_screen | peak VRAM 1.33 GB |
+| 2026-11-23 | `tau075_f1_s42` | `b0a772c` | server | 0.3785 | nan | 9.4 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau075_f2_s42` | `b0a772c` | server | 0.3975 | nan | 8.5 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau100_f0_s42` | `b0a772c` | server | 0.3851 | nan | 10.2 | plan p12_tau_screen | peak VRAM 1.33 GB |
+| 2026-11-23 | `tau100_f1_s42` | `b0a772c` | server | 0.3678 | nan | 10.5 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `tau100_f2_s42` | `b0a772c` | server | 0.3756 | nan | 10.5 | plan p12_tau_screen | peak VRAM 1.32 GB |
+| 2026-11-23 | `final_tau075_s42` | `b0a772c` | server | 0.4080 | 0.4342 | 16.2 | plan p12_tau_final | peak VRAM 1.32 GB |
+| 2026-11-23 | `final_tau100_s42` | `b0a772c` | server | 0.3908 | 0.4141 | 10.5 | plan p12_tau_final | peak VRAM 1.32 GB |
+| 2026-11-23 | `final_tau075_s1` | `b0a772c` | server | 0.3849 | 0.3850 | 15.2 | plan p12_tau_final | peak VRAM 1.33 GB |
+| 2026-11-23 | `final_tau100_s1` | `b0a772c` | server | 0.3815 | 0.4096 | 12.7 | plan p12_tau_final | peak VRAM 1.33 GB |
+| 2026-11-23 | `final_tau075_s2` | `b0a772c` | server | 0.3914 | 0.3753 | 7.0 | plan p12_tau_final | peak VRAM 1.32 GB |
+| 2026-11-23 | `final_tau100_s2` | `b0a772c` | server | 0.4042 | 0.3890 | 8.1 | plan p12_tau_final | peak VRAM 1.32 GB |

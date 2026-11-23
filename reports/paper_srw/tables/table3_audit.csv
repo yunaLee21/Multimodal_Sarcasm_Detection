@@ -1,0 +1,11 @@
+,Pilot n,Pilot raw,Pilot κ,Round 2 n,Round 2 raw (w),Round 2 κ (w)
+Agreement (2 humans),,,,,,
+Caption alone,40,0.800,0.619,pending,pending,pending
+Image alone,40,0.800,0.643,pending,pending,pending
+Pair,39,0.846,0.678,pending,pending,pending
+Image role | pair sarcastic,23,0.783,0.472,pending,pending,pending
+"Gate A: flip rate, image-needed vs other (both humans)",,,,,,
+"LA, random swap",14/39,0.338 vs 0.293,"p = .533, Holm 1.000",pending,pending,pending
+"CE, random swap",14/39,0.233 vs 0.264,"p = .581, Holm 1.000",pending,pending,pending
+"LA, mean mask",14/39,0.571 vs 0.427,"p = .545, Holm 1.000",pending,pending,pending
+"CE, mean mask",14/39,0.357 vs 0.133,"p = .379, Holm 1.000",pending,pending,pending

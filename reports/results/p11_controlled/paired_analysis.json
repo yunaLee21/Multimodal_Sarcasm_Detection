@@ -1,0 +1,48 @@
+{
+  "pairing_checks": [
+    {
+      "seed": 42,
+      "n": 1504,
+      "not-sarcasm": 458,
+      "text-sarcasm": 7,
+      "image-sarcasm": 40,
+      "multi-sarcasm": 999
+    },
+    {
+      "seed": 1,
+      "n": 1504,
+      "not-sarcasm": 458,
+      "text-sarcasm": 7,
+      "image-sarcasm": 40,
+      "multi-sarcasm": 999
+    },
+    {
+      "seed": 2,
+      "n": 1504,
+      "not-sarcasm": 458,
+      "text-sarcasm": 7,
+      "image-sarcasm": 40,
+      "multi-sarcasm": 999
+    }
+  ],
+  "per_seed_diff_macro_f1_4": {
+    "42": 0.03926609679218085,
+    "1": 0.03128074136666814,
+    "2": -0.027681376554262227
+  },
+  "mean_diff_macro_f1_4": 0.014288487201528921,
+  "paired_bootstrap_95ci": [
+    0.0007683873781495212,
+    0.02826871614412115
+  ],
+  "bootstrap_B": 10000,
+  "paired_bootstrap_p_le_0": 0.0192,
+  "group_bootstrap_95ci": [
+    3.0074991397156362e-05,
+    0.028246770978864105
+  ],
+  "n_groups": 1236,
+  "n_multi_member_groups": 92,
+  "n_dup_caption_groups": 92,
+  "n_dup_image_groups": 0
+}

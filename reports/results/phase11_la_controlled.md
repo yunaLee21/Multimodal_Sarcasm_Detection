@@ -225,44 +225,6 @@ seed, which is within noise. Caption-only predicts `image-sarcasm` *more* often 
 per seed) and gets 6 of 40 right without ever seeing an image, so captions carry cues for that label.
 Cross-attention without LA matches caption-only + LA on macro-F1 exactly.
 
-## 8. Still unavailable
-
-Caption-only runs: `data/server/outputs/p11_caption_la_s{42,1,2}` (plan `configs/experiments/phase11_image_contribution.yaml`,
-commit `f8f25ab`). They resolve to the same config as `ca_la_s*` except `model.modality=text`: the same LA loss
-(τ = 1.0), lr, weight decay, dropout, patience, sampler and selection metric. Predictions join on all 1,504 IDs
-with identical labels. Analysis: `analyze_caption_vs_xattn.py` → `caption_vs_xattn_per_seed.csv`,
-`caption_vs_xattn_stats.json`, `caption_vs_xattn_flips_by_class.csv`.
-
-| Mean ± SD (3 seeds) | Caption-only + LA | Cross-attn + LA | Cross-attn + CE |
-|---|---|---|---|
-| Macro-F1 (4) | 0.390 ± 0.006 | 0.404 ± 0.013 | 0.390 ± 0.023 |
-| Macro-F1 (3) | 0.519 ± 0.008 | 0.539 ± 0.018 | 0.520 ± 0.031 |
-| Accuracy | 0.722 ± 0.033 | 0.755 ± 0.009 | 0.733 ± 0.047 |
-| Weighted F1 | 0.736 ± 0.018 | 0.758 ± 0.004 | 0.733 ± 0.033 |
-| F1 not / multi | 0.658 / 0.803 | 0.654 / 0.837 | 0.641 / 0.805 |
-| image P / R / F1 | 0.081 / 0.150 / 0.097 | 0.101 / 0.183 / 0.126 | 0.123 / 0.117 / 0.115 |
-| image correct (of 40) / predicted | 6.0 / 83 | 7.3 / 69 | 4.7 / 33 |
-| text correct (of 7) | 0 | 0 | 0 |
-
-Paired differences use the same bootstrap as above (B = 10,000, the same resampled IDs for all models and seeds,
-conditional on these seeds):
-
-| Comparison | Per seed (42 / 1 / 2) | Mean | 95% CI |
-|---|---|---|---|
-| Cross-attn LA − caption LA, macro-F1 (4) | +0.030 / +0.014 / −0.000 | +0.015 | [−0.004, +0.032] |
-| Cross-attn LA − caption LA, accuracy | +0.047 / −0.009 / +0.061 | +0.033 | [+0.019, +0.047] |
-| Cross-attn CE − caption LA, macro-F1 (4) | −0.009 / −0.017 / +0.027 | +0.000 | [−0.020, +0.020] |
-
-Disagreements between cross-attn LA and caption LA, summed over seeds: cross-attn wins 356 and loses 135 on `multi`,
-wins 68 and loses 145 on `not`, wins 15 and loses 11 on `image`, and neither ever gets a `text` sample right.
-
-Reading: adding the image through cross-attention, under LA, gives a reliable accuracy gain (+0.033) but a
-macro-F1 gain (+0.015) whose interval includes zero. The gain comes almost entirely from `multi-sarcasm`. On
-`image-sarcasm`, the class where the image should matter most, cross-attention gets 1.3 more of 40 correct per
-seed, which is within noise. Caption-only predicts `image-sarcasm` *more* often than cross-attention (83 vs 69
-per seed) and gets 6 of 40 right without ever seeing an image, so captions carry cues for that label.
-Cross-attention without LA matches caption-only + LA on macro-F1 exactly.
-
 ## 8. Label audit: samples where both humans judged the image necessary
 
 The 40-sample pilot in `reports/results/phase11_label_audit/` now has both human raters (person_2 arrived with

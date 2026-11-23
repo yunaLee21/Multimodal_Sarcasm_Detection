@@ -1,0 +1,31 @@
+{
+ "built_utc": "2026-11-23T15:40:16+00:00",
+ "git_commit": "b0a772c",
+ "working_tree_dirty": true,
+ "n_perm": 10000,
+ "round2_available": false,
+ "inputs": {
+  "data/server/outputs/p11_controlled/caption_vs_xattn_per_seed.csv": "1b56c7a1c0292df93f81ca760140a2152f89c894e36baa49e6cd50012556dbe2",
+  "data/server/outputs/p11_controlled/caption_vs_xattn_stats.json": "9ec0534603d337f50c84aff9d0e00ecced177e4ea3d022418d025f61b3090605",
+  "data/server/outputs/p11_controlled/paired_analysis.json": "33c8ec996d3831018d66f1988342bed5d5924ac98283283bba00b9f08d41e29b",
+  "data/server/outputs/p12_srw/image_dependence/arm_condition.csv": "126d2aa646139606737c000c531e2f89f159c4516b5dcbf8d6ee1557e9ca64af",
+  "data/server/outputs/p12_srw/image_dependence/per_run_condition.csv": "3c41b1c16467c6212c1abb2db3ba532980fa5e554edd834cbdb42a4e60577a3f",
+  "data/server/outputs/p12_srw/image_dependence_oof/arm_condition.csv": "bb8ddd079c6dc70a3c0a37d513a7a7a18881a2aa871ca23909f55312a68b4430",
+  "data/server/outputs/p12_srw/image_dependence/fig_flip_direction.pdf": "8dfdaab9d5caa82e8c1152dbc55e5df8965181d3a51f2ed598c214dd6bfbc1ba",
+  "data/server/outputs/p12_srw/tau_screen_summary.csv": "193604160e08209189f920e57fb46f18413f43c08a9f6946e3a6a22b4e900e1f",
+  "data/server/outputs/p12_srw/tau_final_comparison_test.json": "26923919b2efea1c03285fde78385d6965fa05dd789a64073d3a5a381faea5b5",
+  "reports/results/phase11_label_audit/01_caption_ai_rater_1.csv": "0c0865f45c17587763b509c003e1748f8ae4a48b731e12852dc25e6374d80f90",
+  "reports/results/phase11_label_audit/01_caption_ai_rater_2.csv": "4e029a73ae756ac6e8c4e70a52de455b732c8943c7ec6e53755e7b7dbaa23223",
+  "reports/results/phase11_label_audit/01_caption_person_1.csv": "04228401a44ec5697828fd108f11f1f56f1d50c7e4c530577fadf803118b1337",
+  "reports/results/phase11_label_audit/01_caption_person_2.csv": "9d0772cca7f76603d3dff8c1a70c1729b024e9f29a268a71c8d838ab7298bafe",
+  "reports/results/phase11_label_audit/02_image_ai_rater_1.csv": "02f532b871ffc462123a2be849e6e3f94386ed1c098294a7f48e3c7c0f13d206",
+  "reports/results/phase11_label_audit/02_image_ai_rater_2.csv": "5b9ea6151b1a8a116d62ae4470de1f964d8f15b6a85e707e08efd997edea702b",
+  "reports/results/phase11_label_audit/02_image_person_1.csv": "ebef213f624d23143ff72e44b55260bbf91cc3da5b0d60c8eee742de2328e7ff",
+  "reports/results/phase11_label_audit/02_image_person_2.csv": "811e45ce5456983db4f7293df6f181d4a2de7d11f0b3bcc44106feafe0dd9006",
+  "reports/results/phase11_label_audit/03_pair_ai_rater_1.csv": "b52dfcc90af479738251c2f3d0e519a30952aa139a6f6e6c4d3d99ea15f21d77",
+  "reports/results/phase11_label_audit/03_pair_ai_rater_2.csv": "fbf670605392b133ba09e257387ee163b35c2984c9df6d55b9b39f917869904f",
+  "reports/results/phase11_label_audit/03_pair_person_1.csv": "7bf50f0f35eae68adef6c5e42d169f4072a3e06543bf771632a5eb767a8ce025",
+  "reports/results/phase11_label_audit/03_pair_person_2.csv": "835f454066e45dcc94e802fdf0b71e7471b67c7d43b7385016404a02fa225669",
+  "reports/results/phase11_label_audit/coordinator_key.csv": "f92638e56a9227e157513889e2e4eea85f6feddede0ae3c4127c18486cd59bc4"
+ }
+}

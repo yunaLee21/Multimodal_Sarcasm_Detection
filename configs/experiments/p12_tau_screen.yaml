@@ -1,0 +1,43 @@
+# EACL SRW WS-B: logit-adjustment τ screen for cross-attn + LA (reports/plan/eacl_srw_run_plan.md §3). UNCOMMITTED.
+#   VIMMSD_ENV=server python scripts/run_experiments.py --plan configs/experiments/p12_tau_screen.yaml --gpu-ids 0
+# Every setting = Phase 11 controlled ca_la runs (data/server/outputs/p11_controlled/resolved_configs/ca_la_s42.overrides),
+# except loss.tau, the fold and train.eval_test=false (required by the fold manifest).
+# val = held-out group fold of the official train split → val_predictions.csv are out-of-fold predictions.
+# Selection: 4-class macro-F1 on the 3 concatenated OOF folds (reports/plan/protocol.md). Public/private test unused.
+# The τ = 1.0 fold checkpoints are reused by WS-A for the out-of-fold train image-dependence check, so keep best.pt.
+name: p12_tau_screen
+seeds: [42]
+overrides:
+  - train.lr_head=5e-4
+  - train.weight_decay=0.05
+  - model.dropout=0.3
+  - train.early_stop_patience=5
+  - loss.class_weight=null
+  - loss.mixup_alpha=0.0
+  - loss.name=logit_adjustment
+  - data.image_augment=false
+  - data.augment.file=null
+  - data.sampler=random
+  - eval.prior_correction=false
+  - train.select_metric=macro_f1
+  - train.select_exclude_labels=[]
+  - train.num_workers=0          # /dev/shm is 64 MB on this server
+  - data.split_seed=42
+  - train.eval_test=false
+  - data.fold.manifest=data/processed/empirical/splits/folds_k3_s42.json
+  - paths.server.output_dir=data/server/outputs/p12_srw
+evaluate: [val]
+refresh_report: false
+runs:
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau025_f0, overrides: [loss.tau=0.25, data.fold.index=0]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau025_f1, overrides: [loss.tau=0.25, data.fold.index=1]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau025_f2, overrides: [loss.tau=0.25, data.fold.index=2]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau050_f0, overrides: [loss.tau=0.5, data.fold.index=0]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau050_f1, overrides: [loss.tau=0.5, data.fold.index=1]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau050_f2, overrides: [loss.tau=0.5, data.fold.index=2]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau075_f0, overrides: [loss.tau=0.75, data.fold.index=0]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau075_f1, overrides: [loss.tau=0.75, data.fold.index=1]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau075_f2, overrides: [loss.tau=0.75, data.fold.index=2]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau100_f0, overrides: [loss.tau=1.0, data.fold.index=0]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau100_f1, overrides: [loss.tau=1.0, data.fold.index=1]}
+  - {config: configs/fusion_cross_attn_frozen_logit_adjustment.yaml, name: tau100_f2, overrides: [loss.tau=1.0, data.fold.index=2]}

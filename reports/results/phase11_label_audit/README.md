@@ -26,6 +26,4 @@ Ghép phiếu bằng `audit_id` sau khi cả hai hoàn tất. Báo tỷ lệ đ�
 
 ## Lượt gán nhãn bổ sung bằng AI
 
-`01_caption_ai_pass1.csv` chứa một lượt tự gán nhãn của trợ lý trong phiên làm việc hiện tại. Lượt này dựa trên phiếu caption và tiêu chí châm biếm trong guideline, giữ nhãn `khong_chac` khi câu chữ cần ngữ cảnh để phân biệt mỉa mai với cách hiểu thông thường. File lưu một nhận định và căn cứ cho từng mã mẫu. Dùng trường này như đánh giá AI riêng, bên cạnh các phiếu của người đánh giá.
-
-Phần ảnh và cả c
+Hai AI rater gán nhãn trên cùng ba phiếu: `01_caption_ai_rater_{1,2}.csv`, `02_image_ai_rater_{1,2}.csv` và `03_pair_ai_rater_{1,2}.csv` (commit `45eb80f`). Các file dùng cùng cột với phiếu của người đánh giá. Kết quả AI được báo riêng và không gộp vào số đồng thuận giữa hai người (κ, tỷ lệ đồng thuận thô). Phân tích: `data/server/outputs/p11_controlled/analyze_label_audit.py` → `label_audit_analysis.json` và `image_needed_model_comparison.csv`; tóm tắt ở `reports/results/phase11_la_controlled.md` mục 8.

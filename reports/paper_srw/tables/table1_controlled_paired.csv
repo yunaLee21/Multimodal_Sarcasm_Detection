@@ -1,0 +1,4 @@
+"Paired difference (macro-F1, 4)",Mean,95% CI,Per seed (42 / 1 / 2)
+Cross-attn + LA − caption-only,+0.015,"[-0.004, +0.032]",+0.030 / +0.014 / 0.000
+Cross-attn + CE − caption-only,0.000,"[-0.020, +0.020]",-0.009 / -0.017 / +0.027
+Cross-attn + LA − cross-attn + CE,+0.014,"[+0.001, +0.028]",+0.039 / +0.031 / -0.028

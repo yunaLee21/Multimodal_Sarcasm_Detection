@@ -1,0 +1,13 @@
+seed,true,n,"xattn right, caption wrong","caption right, xattn wrong"
+42,not-sarcasm,458,30,34
+42,text-sarcasm,7,0,0
+42,image-sarcasm,40,5,2
+42,multi-sarcasm,999,123,51
+1,not-sarcasm,458,28,40
+1,text-sarcasm,7,0,0
+1,image-sarcasm,40,8,3
+1,multi-sarcasm,999,58,65
+2,not-sarcasm,458,10,71
+2,text-sarcasm,7,0,0
+2,image-sarcasm,40,2,6
+2,multi-sarcasm,999,175,19
